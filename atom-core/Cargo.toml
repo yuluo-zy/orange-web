@@ -8,12 +8,20 @@ edition = "2021"
 [dependencies]
 http-body = "1.0.0-rc.2"
 http-body-util = "0.1.0-rc.2"
-
+pin-project = "1.0.0"
+thiserror = "1.0"
 log = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
 bytes = "1.0"
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 futures-util = "0.3.14"
+serde = { version = "1.0"}
+time = {version = "0.3.21", default-features = false, features = ["std", "formatting", "macros"]}
+mime = "0.3.17"
+mime_guess = "2.0"
+anyhow = "1.0"
 
 pin-project-lite = "0.2.7"
 sync_wrapper = "0.1.1"
+
+tokio = { version = "1.28", features = ["net", "rt-multi-thread", "time", "fs", "io-util"] }
