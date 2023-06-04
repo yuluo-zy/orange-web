@@ -1,13 +1,13 @@
 //! Defines the types for connecting multiple pipeline handles into a "chain" when constructing the
 //! dispatcher for a route.
 
-use borrow_bag::{Handle, Lookup};
 use futures_util::future::{self, FutureExt};
 use log::trace;
 use std::panic::RefUnwindSafe;
 use std::pin::Pin;
 
 use crate::handler::HandlerFuture;
+use crate::helpers::borrow_bag::{Handle, Lookup};
 use crate::middleware::chain::NewMiddlewareChain;
 use crate::pipeline::set::PipelineSet;
 use crate::pipeline::Pipeline;

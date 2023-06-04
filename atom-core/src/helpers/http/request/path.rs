@@ -3,6 +3,7 @@
 use crate::helpers::http::PercentDecoded;
 
 const EXCLUDED_SEGMENTS: [&str; 1] = [""];
+// 这个机制的作用在于过滤掉特定的路径片段，例如空路径片段或其他特定的占位符，以便更精确地处理路径
 
 /// Holder for `Request` URI path segments that have been split into individual segments.
 ///
@@ -12,7 +13,7 @@ pub struct RequestPathSegments {
     segments: Vec<PercentDecoded>,
 }
 
-pub(crate) fn split_path_segments<'a>(path: &'a str) -> impl Iterator<Item = &'a str> {
+pub(crate) fn split_path_segments(path: &str) -> impl Iterator<Item = &str> {
     path.split('/').filter(|s| !EXCLUDED_SEGMENTS.contains(s))
 }
 

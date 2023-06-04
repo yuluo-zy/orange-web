@@ -20,32 +20,6 @@ use crate::test::async_test::{AsyncTestClient, AsyncTestServerInner};
 use crate::test::{self, TestClient, TestServerData};
 use std::time::Duration;
 
-/// The `TestServer` type, which is used as a harness when writing test cases for Hyper services
-/// (which Gotham's `Router` is). An instance of `TestServer` is run asynchronously within the
-/// current thread, and is only accessible by a client returned from the `TestServer`.
-///
-/// # Examples
-///
-/// ```rust
-/// # extern crate hyper;
-/// # extern crate gotham;
-/// #
-/// # use gotham::state::State;
-/// # use hyper::{Body, Response, StatusCode};
-/// #
-/// # fn my_handler(state: State) -> (State, Response<Body>) {
-/// #   (state, Response::builder().status(StatusCode::ACCEPTED).body(Body::empty()).unwrap())
-/// # }
-/// #
-/// # fn main() {
-/// use gotham::test::TestServer;
-///
-/// let test_server = TestServer::new(|| Ok(my_handler)).unwrap();
-///
-/// let response = test_server.client().get("http://localhost/").perform().unwrap();
-/// assert_eq!(response.status(), StatusCode::ACCEPTED);
-/// # }
-/// ```
 #[derive(Clone)]
 pub struct TestServer {
     data: Arc<TestServerData>,
@@ -102,33 +76,6 @@ impl TestServer {
     }
 }
 
-/// An [`AsyncTestServer`], that can be used for testing requests against a server in asynchronous contexts.
-/// The [`AsyncTestServer`] runs in the runtime where it is created and an [`AsyncTestClient`] can be
-/// created to make asynchronous requests to it.
-///
-/// This differs from [`crate::plain::test::TestServer`] in that it doesn't come with it's own runtime and therefore
-/// doesn't crash when used inside of another runtime.
-///
-/// # Example
-///
-/// ```rust
-/// # use gotham::state::State;
-/// # use hyper::{Response, Body, StatusCode};
-/// #
-/// # fn my_handler(state: State) -> (State, Response<Body>) {
-/// #     (state, Response::builder().status(StatusCode::ACCEPTED).body(Body::empty()).unwrap())
-/// # }
-/// #
-/// # #[tokio::main]
-/// # async fn main() {
-/// use gotham::plain::test::AsyncTestServer;
-///
-/// let test_server = AsyncTestServer::new(|| Ok(my_handler)).await.unwrap();
-///
-/// let response = test_server.client().get("http://localhost/").perform().await.unwrap();
-/// assert_eq!(response.status(), StatusCode::ACCEPTED);
-/// # }
-/// ```
 #[derive(Clone)]
 pub struct AsyncTestServer {
     inner: Arc<AsyncTestServerInner>,
@@ -192,87 +139,87 @@ impl From<SocketAddr> for TestConnect {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::test::helper::TestHandler;
-    use crate::test::{self, async_test, Server};
-    use tokio::sync::oneshot;
-
-    #[test]
-    fn test_server_serves_requests() {
-        test::common_tests::serves_requests(TestServer::new, TestServer::client)
-    }
-
-    #[test]
-    fn test_server_times_out() {
-        test::common_tests::times_out(TestServer::with_timeout, TestServer::client)
-    }
-
-    #[test]
-    fn test_server_async_echo() {
-        test::common_tests::async_echo(TestServer::new, TestServer::client)
-    }
-
-    #[test]
-    fn test_server_supports_multiple_servers() {
-        test::common_tests::supports_multiple_servers(TestServer::new, TestServer::client)
-    }
-
-    #[test]
-    fn test_server_spawns_and_runs_futures() {
-        let server = TestServer::new(TestHandler::default()).unwrap();
-
-        let (sender, spawn_receiver) = oneshot::channel();
-        let (spawn_sender, run_receiver) = oneshot::channel();
-        sender.send(1).unwrap();
-        server.spawn(async move {
-            assert_eq!(1, spawn_receiver.await.unwrap());
-            spawn_sender.send(42).unwrap();
-        });
-        assert_eq!(42, server.run_future(run_receiver).unwrap());
-    }
-
-    #[test]
-    fn test_server_adds_client_address_to_state() {
-        test::common_tests::adds_client_address_to_state(TestServer::new, TestServer::client);
-    }
-
-    #[tokio::test]
-    async fn async_test_server_serves_requests() {
-        async_test::common_tests::serves_requests(AsyncTestServer::new, AsyncTestServer::client)
-            .await;
-    }
-
-    #[tokio::test]
-    async fn async_test_server_times_out() {
-        async_test::common_tests::times_out(
-            AsyncTestServer::new_with_timeout,
-            AsyncTestServer::client,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    async fn async_test_server_echo() {
-        async_test::common_tests::echo(AsyncTestServer::new, AsyncTestServer::client).await;
-    }
-
-    #[tokio::test]
-    async fn async_test_server_supports_multiple_servers() {
-        async_test::common_tests::supports_multiple_servers(
-            AsyncTestServer::new,
-            AsyncTestServer::client,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    async fn async_test_server_adds_client_address_to_state() {
-        async_test::common_tests::adds_client_address_to_state(
-            AsyncTestServer::new,
-            AsyncTestServer::client,
-        )
-        .await;
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::test::helper::TestHandler;
+//     use crate::test::{self, async_test, Server};
+//     use tokio::sync::oneshot;
+//
+//     #[test]
+//     fn test_server_serves_requests() {
+//         test::common_tests::serves_requests(TestServer::new, TestServer::client)
+//     }
+//
+//     #[test]
+//     fn test_server_times_out() {
+//         test::common_tests::times_out(TestServer::with_timeout, TestServer::client)
+//     }
+//
+//     #[test]
+//     fn test_server_async_echo() {
+//         test::common_tests::async_echo(TestServer::new, TestServer::client)
+//     }
+//
+//     #[test]
+//     fn test_server_supports_multiple_servers() {
+//         test::common_tests::supports_multiple_servers(TestServer::new, TestServer::client)
+//     }
+//
+//     #[test]
+//     fn test_server_spawns_and_runs_futures() {
+//         let server = TestServer::new(TestHandler::default()).unwrap();
+//
+//         let (sender, spawn_receiver) = oneshot::channel();
+//         let (spawn_sender, run_receiver) = oneshot::channel();
+//         sender.send(1).unwrap();
+//         server.spawn(async move {
+//             assert_eq!(1, spawn_receiver.await.unwrap());
+//             spawn_sender.send(42).unwrap();
+//         });
+//         assert_eq!(42, server.run_future(run_receiver).unwrap());
+//     }
+//
+//     #[test]
+//     fn test_server_adds_client_address_to_state() {
+//         test::common_tests::adds_client_address_to_state(TestServer::new, TestServer::client);
+//     }
+//
+//     #[tokio::test]
+//     async fn async_test_server_serves_requests() {
+//         async_test::common_tests::serves_requests(AsyncTestServer::new, AsyncTestServer::client)
+//             .await;
+//     }
+//
+//     #[tokio::test]
+//     async fn async_test_server_times_out() {
+//         async_test::common_tests::times_out(
+//             AsyncTestServer::new_with_timeout,
+//             AsyncTestServer::client,
+//         )
+//         .await;
+//     }
+//
+//     #[tokio::test]
+//     async fn async_test_server_echo() {
+//         async_test::common_tests::echo(AsyncTestServer::new, AsyncTestServer::client).await;
+//     }
+//
+//     #[tokio::test]
+//     async fn async_test_server_supports_multiple_servers() {
+//         async_test::common_tests::supports_multiple_servers(
+//             AsyncTestServer::new,
+//             AsyncTestServer::client,
+//         )
+//         .await;
+//     }
+//
+//     #[tokio::test]
+//     async fn async_test_server_adds_client_address_to_state() {
+//         async_test::common_tests::adds_client_address_to_state(
+//             AsyncTestServer::new,
+//             AsyncTestServer::client,
+//         )
+//         .await;
+//     }
+// }

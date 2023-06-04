@@ -1,9 +1,8 @@
 //! Defines helpers for applications that only require a single pipeline (i.e. only one set of
 //! middleware for the application).
 
-use borrow_bag::{Append, Handle};
-
 use super::{finalize_pipeline_set, new_pipeline_set, NewMiddlewareChain, Pipeline, PipelineSet};
+use crate::helpers::borrow_bag::{Append, Handle};
 
 /// A `PipelineSet` which contains only a single pipeline.
 pub type SinglePipelineSet<C> = PipelineSet<<() as Append<Pipeline<C>>>::Output>;

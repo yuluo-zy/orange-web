@@ -34,7 +34,6 @@ pub use gotham_derive::NewMiddleware;
 ///
 /// ```rust
 /// # #[macro_use]
-/// # extern crate gotham_derive;
 /// #
 /// # use std::pin::Pin;
 /// #

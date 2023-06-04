@@ -13,7 +13,7 @@ pub(crate) type QueryStringMapping = HashMap<String, Vec<FormUrlDecoded>>;
 /// populated with each value provided.
 ///
 /// Keys that are provided but with no value associated are skipped.
-pub(crate) fn split<'r>(query: Option<&'r str>) -> QueryStringMapping {
+pub(crate) fn split(query: Option<&str>) -> QueryStringMapping {
     let mut query_string_mapping = QueryStringMapping::new();
 
     if let Some(query) = query {

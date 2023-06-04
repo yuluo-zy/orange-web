@@ -387,6 +387,17 @@ where
     }
 }
 
+impl<T> Deref for SessionData<T>
+where
+    T: 'static + Default + Send + Serialize + for<'de> Deserialize<'de>,
+{
+    type Target = ();
+
+    fn deref(&self) -> &Self::Target {
+        todo!()
+    }
+}
+
 impl<T> DerefMut for SessionData<T>
 where
     T: Default + Serialize + for<'de> Deserialize<'de> + Send + 'static,

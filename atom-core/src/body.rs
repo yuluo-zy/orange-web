@@ -4,26 +4,24 @@ use bytes::Bytes;
 use futures_util::stream::Stream;
 use futures_util::TryStream;
 use http_body::{Body as _, Frame};
-use http_body_util::{BodyExt};
+use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use sync_wrapper::SyncWrapper;
 
 use crate::error::{BoxError, Error};
-use crate::utils::try_downcast;
-
+use crate::helpers::utils::try_downcast;
 
 type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
 
 fn boxed<B>(body: B) -> BoxBody
-    where
-        B: http_body::Body<Data = Bytes> + Send + 'static,
-        B::Error: Into<BoxError>,
+where
+    B: http_body::Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxError>,
 {
     try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
 }
-
 
 /// The body type used in requests and responses.
 #[derive(Debug)]
@@ -32,9 +30,9 @@ pub struct Body(BoxBody);
 impl Body {
     /// Create a new `Body` that wraps another [`http_body::Body`].
     pub fn new<B>(body: B) -> Self
-        where
-            B: http_body::Body<Data = Bytes> + Send + 'static,
-            B::Error: Into<BoxError>,
+    where
+        B: http_body::Body<Data = Bytes> + Send + 'static,
+        B::Error: Into<BoxError>,
     {
         try_downcast(body).unwrap_or_else(|body| Self(boxed(body)))
     }
@@ -48,10 +46,10 @@ impl Body {
     ///
     /// [`Stream`]: futures_util::stream::Stream
     pub fn from_stream<S>(stream: S) -> Self
-        where
-            S: TryStream + Send + 'static,
-            S::Ok: Into<Bytes>,
-            S::Error: Into<BoxError>,
+    where
+        S: TryStream + Send + 'static,
+        S::Ok: Into<Bytes>,
+        S::Error: Into<BoxError>,
     {
         Self::new(StreamBody {
             // 使用静态版本来避免分配和锁定 Mutex 的开销。
@@ -134,10 +132,10 @@ pin_project! {
 }
 
 impl<S> http_body::Body for StreamBody<S>
-    where
-        S: TryStream,
-        S::Ok: Into<Bytes>,
-        S::Error: Into<BoxError>,
+where
+    S: TryStream,
+    S::Ok: Into<Bytes>,
+    S::Error: Into<BoxError>,
 {
     type Data = Bytes;
     type Error = Error;

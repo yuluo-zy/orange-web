@@ -1,7 +1,7 @@
 //! Defines the types for adding multiple pipelines into a `PipelineSet` and retaining a handle to
 //! each pipeline for constructing a `PipelineHandleChain`.
 
-use borrow_bag::BorrowBag;
+use crate::helpers::borrow_bag::BorrowBag;
 use std::sync::Arc;
 
 /// Represents the set of all `Pipeline` instances that are available for use when building a
