@@ -17,6 +17,7 @@ use futures_util::future::{self, FutureExt, TryFutureExt};
 use hyper::header::ALLOW;
 use hyper::{Response, StatusCode};
 use log::{error, trace};
+use crate::body::Body;
 
 use crate::handler::{Handler, HandlerFuture, IntoResponse, NewHandler};
 use crate::helpers::http::request::path::RequestPathSegments;

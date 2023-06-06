@@ -1,9 +1,11 @@
 use std::marker::PhantomData;
 use std::panic::RefUnwindSafe;
 
-use hyper::{Body, Method};
+use hyper::{ Method};
+use crate::body::Body;
+use crate::extractor::path::PathExtractor;
+use crate::extractor::query_string::QueryStringExtractor;
 
-use crate::extractor::{PathExtractor, QueryStringExtractor};
 use crate::pipeline::{PipelineHandleChain, PipelineSet};
 use crate::router::builder::SingleRouteBuilder;
 use crate::router::route::matcher::{
@@ -490,9 +492,9 @@ where
     /// #   assert_eq!(response.status(), StatusCode::ACCEPTED);
     /// # }
     /// ```
-    pub fn post<'b>(
-        &'b mut self,
-    ) -> AssociatedSingleRouteBuilder<'b, AssociatedRouteMatcher<M>, C, P, PE, QSE> {
+    pub fn post(
+        &mut self,
+    ) -> AssociatedSingleRouteBuilder<AssociatedRouteMatcher<M>, C, P, PE, QSE> {
         self.request(vec![Method::POST])
     }
 
@@ -534,9 +536,9 @@ where
     /// #   assert_eq!(response.status(), StatusCode::ACCEPTED);
     /// # }
     /// ```
-    pub fn put<'b>(
-        &'b mut self,
-    ) -> AssociatedSingleRouteBuilder<'b, AssociatedRouteMatcher<M>, C, P, PE, QSE> {
+    pub fn put(
+        &mut self,
+    ) -> AssociatedSingleRouteBuilder<AssociatedRouteMatcher<M>, C, P, PE, QSE> {
         self.request(vec![Method::PUT])
     }
 

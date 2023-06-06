@@ -1,11 +1,12 @@
 use futures_util::FutureExt;
-use hyper::Body;
 
 use std::future::Future;
 use std::panic::RefUnwindSafe;
 use std::pin::Pin;
+use crate::body::Body;
+use crate::extractor::path::PathExtractor;
+use crate::extractor::query_string::QueryStringExtractor;
 
-use crate::extractor::{PathExtractor, QueryStringExtractor};
 use crate::handler::{
     DirHandler, FileHandler, FileOptions, FilePathExtractor, Handler, HandlerError, HandlerFuture,
     HandlerResult, IntoResponse, NewHandler,
@@ -25,7 +26,7 @@ pub trait HandlerMarker {
 
 pub trait AsyncHandlerFn<'a> {
     type Res: IntoResponse + 'static;
-    type Fut: std::future::Future<Output = Result<Self::Res, HandlerError>> + Send + 'a;
+    type Fut: Future<Output = Result<Self::Res, HandlerError>> + Send + 'a;
     fn call(self, arg: &'a mut State) -> Self::Fut;
 }
 
@@ -33,7 +34,7 @@ impl<'a, Fut, R, F> AsyncHandlerFn<'a> for F
 where
     F: FnOnce(&'a mut State) -> Fut,
     R: IntoResponse + 'static,
-    Fut: std::future::Future<Output = Result<R, HandlerError>> + Send + 'a,
+    Fut: Future<Output = Result<R, HandlerError>> + Send + 'a,
 {
     type Res = R;
     type Fut = Fut;

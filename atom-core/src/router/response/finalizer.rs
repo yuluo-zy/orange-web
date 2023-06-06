@@ -6,8 +6,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use futures_util::future::{self, FutureExt};
-use hyper::{Body, Response, StatusCode};
+use hyper::{ Response, StatusCode};
 use log::trace;
+use crate::body::Body;
 
 use crate::handler::HandlerFuture;
 use crate::state::{request_id, State};
