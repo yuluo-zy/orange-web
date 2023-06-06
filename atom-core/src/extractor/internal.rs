@@ -1,3 +1,7 @@
+//! Extracts request path segments into type-safe structs using Serde. The `ExtractorDeserializer`
+//! type is populated by the `Router` while traversing the tree, and the `Route` implementation
+//! performs deserialization before dispatching to the `Handler`.
+
 use std::error::Error;
 use std::fmt::{self, Display};
 use std::marker::PhantomData;
@@ -48,7 +52,7 @@ pub(crate) enum ExtractorError {
     ///
     ///     // These variants are not supported, as there is no possible source for the values
     ///     // required to construct them.
-    ///     NewTypeVariant(i32),
+    ///     NewtypeVariant(i32),
     ///     TupleVariant(i32, i32, i32),
     ///     StructVariant { i: i32 },
     /// }
@@ -175,12 +179,12 @@ macro_rules! reject_value_type {
 ///
 /// See `from_segment_mapping` and `from_query_string` for how the values are constructed.
 trait ExtractorDataSource<'a> {
-    type Iterator<'b>: Iterator<Item = (&'a str, Self::ValueIterator<'b>)>;
-    type ValueIterator<'b>: IntoIterator<Item = &'b Self::Value>;
+    type Iterator: Iterator<Item = (&'a str, Self::ValueIterator)>;
+    type ValueIterator: IntoIterator<Item = &'a Self::Value>;
     type Value: AsRef<str> + 'a + ?Sized;
 
     /// Returns the next value from the underlying iterator.
-    fn next<'b>(&'b mut self) -> Option<(&'a str, Self::ValueIterator<'b>)>;
+    fn next(&mut self) -> Option<(&'a str, Self::ValueIterator)>;
 }
 
 /// Concrete type which implements `ExtractorDataSource`. See `from_segment_mapping` and

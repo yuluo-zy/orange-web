@@ -6,7 +6,7 @@ use hyper::header::{HeaderMap, HeaderValue, COOKIE};
 
 use super::{Middleware, NewMiddleware};
 use crate::handler::HandlerFuture;
-use crate::state::{FromState, State};
+use crate::state::{FromState, State, StateData};
 
 /// A struct that can act as a cookie parsing middleware for Gotham.
 ///
@@ -15,6 +15,9 @@ use crate::state::{FromState, State};
 /// become availabe on the request state as the `CookieJar` type.
 #[derive(Copy, Clone)]
 pub struct CookieParser;
+
+impl StateData for CookieJar {}
+
 
 /// Public API for external re-use.
 impl CookieParser {

@@ -2,4 +2,7 @@
 members = [
     ## Core
     "atom-core",
+
+    ##examples
+    "examples-demo/hello_world"
 ]
