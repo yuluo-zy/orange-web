@@ -9,6 +9,7 @@ use std::task::{self, Poll};
 use futures_util::future::{BoxFuture, FutureExt};
 use hyper::service::Service;
 use hyper::{Request, Response};
+use hyper::body::Incoming;
 
 use crate::handler::NewHandler;
 use crate::state::State;
@@ -65,6 +66,20 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let state = State::from_request(req, self.client_addr);
+        call_handler(self.handler.clone(), AssertUnwindSafe(state)).boxed()
+    }
+}
+
+impl<T> Service<Request<Incoming>> for ConnectedGothamService<T>
+    where
+        T: NewHandler,
+{
+    type Response = Response<Body>;
+    type Error = anyhow::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn call(&mut self, req: Request<Incoming>) -> Self::Future {
+        let state = State::from_request_incoming(req, self.client_addr);
         call_handler(self.handler.clone(), AssertUnwindSafe(state)).boxed()
     }
 }

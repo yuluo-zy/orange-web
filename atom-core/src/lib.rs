@@ -93,7 +93,8 @@ where
             accepted_protocol
                 .serve_connection(socket, service)
                 .with_upgrades()
-                .await?;
+                .await
+                .expect("accepted protocol errors");
 
             Result::<_, ()>::Ok(())
         };

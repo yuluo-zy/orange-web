@@ -7,12 +7,13 @@ mod request_id;
 
 use hyper::http::request;
 use hyper::upgrade::OnUpgrade;
-use hyper::{ Request};
+use hyper::{Request};
 use log::{debug, trace};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::net::SocketAddr;
+use hyper::body::Incoming;
 use crate::body::Body;
 
 pub use crate::state::client_addr::client_addr;
@@ -53,6 +54,8 @@ pub struct State {
     data: HashMap<TypeId, Box<dyn Any + Send>, BuildHasherDefault<IdHasher>>,
 }
 
+impl StateData for Incoming {}
+
 // todo:: State 的生命周期问题
 
 impl State {
@@ -70,8 +73,8 @@ impl State {
     /// cannot be constructed otherwise.
     #[doc(hidden)]
     pub fn with_new<F>(f: F)
-    where
-        F: FnOnce(&mut State),
+        where
+            F: FnOnce(&mut State),
     {
         f(&mut State::new())
     }
@@ -121,11 +124,54 @@ impl State {
 
         state
     }
+    pub fn from_request_incoming(req: Request<Incoming>, client_addr: SocketAddr) -> Self {
+        let mut state = Self::new();
+
+        put_client_addr(&mut state, client_addr);
+
+        let (
+            request::Parts {
+                method,
+                uri,
+                version,
+                headers,
+                mut extensions,
+                ..
+            },
+            body,
+        ) = req.into_parts();
+
+        // 添加静态常量池
+
+        // 将 请求体 解包然后 进行复制
+        // state.put(RequestPathSegments::new(uri.path()));
+        state.put(method);
+        state.put(uri);
+        state.put(version);
+        state.put(headers);
+        state.put(body);
+
+        if let Some(on_upgrade) = extensions.remove::<OnUpgrade>() {
+            state.put(on_upgrade);
+        }
+
+        {
+            let request_id = set_request_id(&mut state);
+            // 设置请求ID
+            debug!(
+                "[DEBUG][{}][Thread][{:?}]",
+                request_id,
+                std::thread::current().id(),
+            );
+        };
+
+        state
+    }
 
 
     pub fn put<T>(&mut self, t: T)
-    where
-        T: StateData,
+        where
+            T: StateData,
     {
         let type_id = TypeId::of::<T>();
         trace!(" inserting record to state for type_id `{:?}`", type_id);
@@ -135,8 +181,8 @@ impl State {
 
 
     pub fn has<T>(&self) -> bool
-    where
-        T: StateData,
+        where
+            T: StateData,
     {
         let type_id = TypeId::of::<T>();
         self.data.get(&type_id).is_some()
@@ -144,8 +190,8 @@ impl State {
 
 
     pub fn try_borrow<T>(&self) -> Option<&T>
-    where
-        T: StateData,
+        where
+            T: StateData,
     {
         let type_id = TypeId::of::<T>();
         trace!(" borrowing state data for type_id `{:?}`", type_id);
@@ -156,8 +202,8 @@ impl State {
 
 
     pub fn borrow<T>(&self) -> &T
-    where
-        T: StateData,
+        where
+            T: StateData,
     {
         // 直接返回对应的数据 而不是返回OPen的类型
         self.try_borrow()
@@ -166,8 +212,8 @@ impl State {
 
 
     pub fn try_borrow_mut<T>(&mut self) -> Option<&mut T>
-    where
-        T: StateData,
+        where
+            T: StateData,
     {
         let type_id = TypeId::of::<T>();
         trace!(" mutably borrowing state data for type_id `{:?}`", type_id);
@@ -178,8 +224,8 @@ impl State {
 
 
     pub fn borrow_mut<T>(&mut self) -> &mut T
-    where
-        T: StateData,
+        where
+            T: StateData,
     {
         self.try_borrow_mut()
             .expect("required type is not present in State container")
@@ -187,8 +233,8 @@ impl State {
 
 
     pub fn try_take<T>(&mut self) -> Option<T>
-    where
-        T: StateData,
+        where
+            T: StateData,
     {
         let type_id = TypeId::of::<T>();
         trace!(
@@ -203,8 +249,8 @@ impl State {
 
 
     pub fn take<T>(&mut self) -> T
-    where
-        T: StateData,
+        where
+            T: StateData,
     {
         self.try_take()
             .expect("required type is not present in State container")
