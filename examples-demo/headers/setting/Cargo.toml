@@ -1,0 +1,11 @@
+[package]
+name = "gotham_examples_headers_setting"
+description = "Setting a header value for a Gotham web framework response"
+version = "0.0.0"
+authors = ["Eren Güven <erenguven0@gmail.com>"]
+publish = false
+edition = "2021"
+
+[dependencies]
+atom-core = { path = "../../../atom-core" }
+simple_logger="4.0.0"

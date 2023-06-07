@@ -4,5 +4,7 @@ members = [
     "atom-core",
 
     ##examples
-    "examples-demo/hello_world"
+    "examples-demo/hello_world",
+    "examples-demo/headers/setting",
+    "examples-demo/cookies/introduction"
 ]

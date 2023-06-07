@@ -12,7 +12,7 @@ use base64::prelude::*;
 use cookie::{Cookie, CookieJar};
 use futures_util::future::{self, FutureExt, TryFutureExt};
 use hyper::header::SET_COOKIE;
-use hyper::{Body, Response, StatusCode};
+use hyper::{Response, StatusCode};
 use log::{error, trace, warn};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};

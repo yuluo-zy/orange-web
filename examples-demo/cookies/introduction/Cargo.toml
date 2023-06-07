@@ -1,0 +1,11 @@
+[package]
+name = "gotham_examples_cookies_introduction"
+description = "An introduction to storing and retrieving cookies with the Gotham web framework."
+version = "0.0.0"
+authors = ["Daniel Wagner-Hall <dawagner@gmail.com>"]
+publish = false
+edition = "2018"
+
+[dependencies]
+atom-core = { path = "../../../atom-core" }
+simple_logger="4.0.0"

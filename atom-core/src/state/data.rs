@@ -1,4 +1,5 @@
 use std::any::Any;
+use cookie::CookieJar;
 
 use hyper::upgrade::OnUpgrade;
 use hyper::{HeaderMap, Method, Uri, Version};

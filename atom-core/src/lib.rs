@@ -10,6 +10,16 @@ pub mod router;
 pub mod service;
 pub mod state;
 pub mod tls;
+pub mod derive;
+
+pub use anyhow;
+/// Re-export hyper
+pub use hyper;
+/// Re-export mime
+pub use mime;
+pub use cookie;
+
+pub use plain::*;
 
 use crate::handler::NewHandler;
 use crate::service::GothamService;

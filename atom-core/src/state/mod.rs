@@ -15,6 +15,7 @@ use std::hash::{BuildHasherDefault, Hasher};
 use std::net::SocketAddr;
 use hyper::body::Incoming;
 use crate::body::Body;
+use crate::helpers::http::request::path::RequestPathSegments;
 
 pub use crate::state::client_addr::client_addr;
 pub use crate::state::data::StateData;
@@ -101,7 +102,7 @@ impl State {
         // 添加静态常量池
 
         // 将 请求体 解包然后 进行复制
-        // state.put(RequestPathSegments::new(uri.path()));
+        state.put(RequestPathSegments::new(uri.path()));
         state.put(method);
         state.put(uri);
         state.put(version);
@@ -144,7 +145,7 @@ impl State {
         // 添加静态常量池
 
         // 将 请求体 解包然后 进行复制
-        // state.put(RequestPathSegments::new(uri.path()));
+        state.put(RequestPathSegments::new(uri.path()));
         state.put(method);
         state.put(uri);
         state.put(version);
