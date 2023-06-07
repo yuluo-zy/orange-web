@@ -1,0 +1,13 @@
+[package]
+name = "gotham_examples_handlers_multipart"
+description = "An example of decoding multipart form requests"
+version = "0.0.0"
+authors = ["Paul Zhang <paulzhang5511>"]
+publish = false
+edition = "2018"
+
+[dependencies]
+atom-core = { path = "../../../atom-core" }
+
+futures-util = "0.3.14"
+multipart = { version = "0.18", default-features = false, features = ["server"] }

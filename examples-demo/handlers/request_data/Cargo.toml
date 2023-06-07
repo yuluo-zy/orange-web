@@ -1,0 +1,12 @@
+[package]
+name = "gotham_examples_handlers_request_data"
+description = "A basic application showing the request components available"
+version = "0.0.0"
+authors = ["Nicolas Pochet <npochet@gmail.com>"]
+publish = false
+edition = "2018"
+
+[dependencies]
+atom-core = { path = "../../../atom-core" }
+
+futures-util = "0.3.14"

@@ -1,0 +1,13 @@
+[package]
+name = "gotham_examples_handlers_form_urlencoded"
+description = "An example of decoding requests from an HTML form element"
+version = "0.0.0"
+authors = ["Jacob Budin <self@jacobbudin.com>"]
+publish = false
+edition = "2018"
+
+[dependencies]
+atom-core = { path = "../../../atom-core" }
+
+futures-util = "0.3.14"
+url = "2.1"

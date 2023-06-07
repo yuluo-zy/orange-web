@@ -1,0 +1,13 @@
+[package]
+name = "gotham_examples_custom_service"
+description = "Using Gotham in a pre-existing Hyper service"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+atom-core = { path = "../../atom-core" }
+simple_logger="4.0.0"
+anyhow = "1.0"
+futures-util = "0.3.14"
+tokio = { version = "1.11.0", features = ["full"] }

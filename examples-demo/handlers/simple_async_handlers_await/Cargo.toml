@@ -1,0 +1,13 @@
+[package]
+name = "gotham_examples_handlers_simple_async_handlers_await"
+description = "An example that does asynchronous work before responding"
+version = "0.0.0"
+authors = ["David Laban <alsuren@gmail.com>"]
+publish = false
+edition = "2018"
+
+[dependencies]
+atom-core = { path = "../../../atom-core" }
+
+serde = "1.0"
+tokio = "1.11.0"

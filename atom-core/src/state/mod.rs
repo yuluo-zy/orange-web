@@ -125,6 +125,7 @@ impl State {
 
         state
     }
+
     pub fn from_request_incoming(req: Request<Incoming>, client_addr: SocketAddr) -> Self {
         let mut state = Self::new();
 
@@ -150,7 +151,7 @@ impl State {
         state.put(uri);
         state.put(version);
         state.put(headers);
-        state.put(body);
+        state.put(Body::new(body));
 
         if let Some(on_upgrade) = extensions.remove::<OnUpgrade>() {
             state.put(on_upgrade);

@@ -1,9 +1,9 @@
 //! HTTP body utilities.
 
-use bytes::Bytes;
+use bytes::{BufMut, Bytes};
 use futures_util::stream::Stream;
-use futures_util::TryStream;
-use http_body::{Body as _, Frame};
+use futures_util::{StreamExt, TryStream};
+use http_body::{Body as HttpBody, Frame};
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 use std::pin::Pin;
@@ -55,6 +55,14 @@ impl Body {
             // 使用静态版本来避免分配和锁定 Mutex 的开销。
             stream: SyncWrapper::new(stream),
         })
+    }
+
+    pub async fn to_bytes(self) -> Result<Bytes, Error> {
+        // futures_util::pin_mut!(self);
+        if let Ok(collect) = BodyExt::collect(self).await {
+          return  Ok(collect.to_bytes());
+        }
+       return  Ok(Bytes::new());
     }
 }
 

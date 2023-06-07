@@ -1,0 +1,15 @@
+# Remove all comments here from final version.
+[package]
+# Generic naming structure used on all examples, lowercase.
+# replace `functionality` and `name` with your functionality area
+# anf example name respectively.
+name = "gotham_examples_functionality_name"
+description = "<describe the example and what readers can learn"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+atom-core = { path = "../../../atom-core" }
+
+# Add other dependencies if necessary

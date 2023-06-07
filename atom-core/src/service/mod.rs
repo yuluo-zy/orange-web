@@ -56,19 +56,19 @@ where
     client_addr: SocketAddr,
 }
 
-impl<T> Service<Request<Body>> for ConnectedGothamService<T>
-where
-    T: NewHandler,
-{
-    type Response = Response<Body>;
-    type Error = anyhow::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let state = State::from_request(req, self.client_addr);
-        call_handler(self.handler.clone(), AssertUnwindSafe(state)).boxed()
-    }
-}
+// impl<T> Service<Request<Body>> for ConnectedGothamService<T>
+// where
+//     T: NewHandler,
+// {
+//     type Response = Response<Body>;
+//     type Error = anyhow::Error;
+//     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+//
+//     fn call(&mut self, req: Request<Body>) -> Self::Future {
+//         let state = State::from_request(req, self.client_addr);
+//         call_handler(self.handler.clone(), AssertUnwindSafe(state)).boxed()
+//     }
+// }
 
 impl<T> Service<Request<Incoming>> for ConnectedGothamService<T>
     where

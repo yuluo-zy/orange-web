@@ -6,5 +6,15 @@ members = [
     ##examples
     "examples-demo/hello_world",
     "examples-demo/headers/setting",
-    "examples-demo/cookies/introduction"
+    "examples-demo/cookies/introduction",
+    "examples-demo/custom_service",
+    "examples-demo/example_contribution_template/name",
+    "examples-demo/finalizers",
+    "examples-demo/handlers/request_data",
+    "examples-demo/handlers/stateful",
+    "examples-demo/handlers/simple_async_handlers",
+    "examples-demo/handlers/simple_async_handlers_await",
+    "examples-demo/handlers/async_handlers",
+    "examples-demo/handlers/form_urlencoded",
+    "examples-demo/handlers/multipart",
 ]
