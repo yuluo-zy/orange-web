@@ -151,6 +151,7 @@ impl State {
         state.put(uri);
         state.put(version);
         state.put(headers);
+        // todo: 优化一下这里
         state.put(Body::new(body));
 
         if let Some(on_upgrade) = extensions.remove::<OnUpgrade>() {

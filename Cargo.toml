@@ -2,6 +2,7 @@
 members = [
     ## Core
     "atom-core",
+    "atom-derive",
 
     ##examples
     "examples-demo/hello_world",
