@@ -1,13 +1,14 @@
+use std::any::Any;
 use hyper::{Response, body::Body as HttpBody};
 use serde::{Deserialize, Deserializer};
 use crate::body::Body;
 use crate::router::response::StaticResponseExtender;
 
 // use crate::router::response::StaticResponseExtender;
-use crate::state::{State, StateData};
+use crate::state::{State};
 
 pub trait QueryStringExtractor<B>:
-    for<'de> Deserialize<'de> + StaticResponseExtender<ResBody = B> + StateData
+    for<'de> Deserialize<'de> + StaticResponseExtender<ResBody = B> + Any + Send
 where
     B: HttpBody,
 {
@@ -16,7 +17,7 @@ where
 impl<T, B> QueryStringExtractor<B> for T
 where
     B: HttpBody,
-    for<'de> T: Deserialize<'de> + StaticResponseExtender<ResBody = B> + StateData,
+    for<'de> T: Deserialize<'de> + StaticResponseExtender<ResBody = B> + Any + Send,
 {
 }
 
@@ -39,8 +40,6 @@ impl<'de> Deserialize<'de> for NoopQueryStringExtractor {
         Ok(NoopQueryStringExtractor)
     }
 }
-
-impl StateData for NoopQueryStringExtractor {}
 
 impl StaticResponseExtender for NoopQueryStringExtractor {
     type ResBody = Body;

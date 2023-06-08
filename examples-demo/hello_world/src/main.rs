@@ -16,7 +16,7 @@ pub fn say_hello(state: State) -> (State, &'static str) {
 pub fn main() {
     let addr = "127.0.0.1:7878";
     println!("Listening for requests at http://{}", addr);
-    atom_core::plain::start(addr, || Ok(say_hello)).unwrap();
+    atom_core::start(addr, || Ok(say_hello)).unwrap();
 }
 
 #[cfg(test)]

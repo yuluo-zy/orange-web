@@ -4,7 +4,6 @@
 use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
-use std::task::{self, Poll};
 
 use futures_util::future::{BoxFuture, FutureExt};
 use hyper::service::Service;

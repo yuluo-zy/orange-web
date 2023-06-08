@@ -6,6 +6,7 @@ use atom_core::body::Body;
 use atom_core::handler::HandlerFuture;
 use atom_core::helpers::http::response::create_empty_response;
 use atom_core::hyper::{HeaderMap, Method, Response, StatusCode, Uri, Version};
+use atom_core::hyper::http::HeaderValue;
 use atom_core::router::builder::{build_simple_router, DefineSingleRoute, DrawRoutes};
 use atom_core::router::Router;
 use atom_core::state::{FromState, State};
@@ -15,7 +16,8 @@ fn print_request_elements(state: &State) {
     let method = Method::borrow_from(state);
     let uri = Uri::borrow_from(state);
     let http_version = Version::borrow_from(state);
-    let headers = HeaderMap::borrow_from(state);
+    // let headers = state.borrow::<HeaderMap>();
+    let headers = HeaderMap::<HeaderValue>::borrow_from(state);
     println!("Method: {:?}", method);
     println!("URI: {:?}", uri);
     println!("HTTP Version: {:?}", http_version);
@@ -42,7 +44,6 @@ fn post_handler(mut state: State) -> Pin<Box<HandlerFuture>> {
 fn get_handler(state: State) -> (State, Response<Body>) {
     print_request_elements(&state);
     let res = create_empty_response(&state, StatusCode::OK);
-
     (state, res)
 }
 

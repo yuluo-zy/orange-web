@@ -2,6 +2,7 @@
 
 use hyper::header::HeaderMap;
 use log::trace;
+use regex::internal::Input;
 use uuid::Uuid;
 
 use crate::state::{FromState, State};
@@ -24,7 +25,7 @@ pub(super) struct RequestId {
 pub(crate) fn set_request_id(state: &mut State) -> &str {
     if !state.has::<RequestId>() {
         // 通过类型 id 来查询数据的
-        let request_id = match HeaderMap::borrow_from(state).get("X-Request-ID") {
+        let request_id = match state.borrow::<HeaderMap>().get("X-Request-ID") {
             Some(ex_req_id) => {
                 let id = String::from_utf8(ex_req_id.as_bytes().into()).unwrap();
                 trace!(

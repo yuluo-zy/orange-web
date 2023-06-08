@@ -1,14 +1,15 @@
+use std::any::Any;
 use hyper::{Response};
 use hyper::body::Body as HttpBody;
 use serde::{Deserialize, Deserializer};
 use crate::body::Body;
 
 use crate::router::response::StaticResponseExtender;
-use crate::state::{State, StateData};
+use crate::state::{State};
 
 pub trait PathExtractor<B>:
 // 指定一个更高级的生命周期
-    for<'de> Deserialize<'de> + StaticResponseExtender<ResBody=B> + StateData
+    for<'de> Deserialize<'de> + StaticResponseExtender<ResBody=B> + Any + Send
     where
         B: HttpBody,
 {}
@@ -16,7 +17,7 @@ pub trait PathExtractor<B>:
 impl<T, B> PathExtractor<B> for T
     where
         B: HttpBody,
-        for<'de> T: Deserialize<'de> + StaticResponseExtender<ResBody=B> + StateData,
+        for<'de> T: Deserialize<'de> + StaticResponseExtender<ResBody=B> + Any + Send,
 {}
 
 /// A `PathExtractor` that does not extract/store any data from the `Request` path.
@@ -36,8 +37,6 @@ impl<'de> Deserialize<'de> for NoopPathExtractor {
         Ok(NoopPathExtractor)
     }
 }
-
-impl StateData for NoopPathExtractor {}
 
 impl StaticResponseExtender for NoopPathExtractor {
     type ResBody = Body;

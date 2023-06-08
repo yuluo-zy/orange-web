@@ -16,8 +16,8 @@ use atom_core::body::Body;
 /// Extracts the elements of the POST request and responds with the form keys and values
 fn form_handler(mut state: State) -> Pin<Box<HandlerFuture>> {
     const BOUNDARY: &str = "boundary=";
-    let header_map = HeaderMap::take_from(&mut state);
-    let boundary = header_map
+    let header_map =HeaderMap::borrow_mut_from(&mut state);
+    let boundary =header_map
         .get(CONTENT_TYPE)
         .and_then(|ct| {
             let ct = ct.to_str().ok()?;

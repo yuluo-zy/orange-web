@@ -93,7 +93,7 @@ impl RouteMatcher for ContentTypeHeaderRouteMatcher {
     /// Determines if the `Request` was made using a `Content-Type` header that includes a
     /// supported media type.
     fn is_match(&self, state: &State) -> Result<(), RouteNonMatch> {
-        HeaderMap::borrow_from(state)
+        state.borrow::<HeaderMap>()
             .get(CONTENT_TYPE)
             .map(|ty| {
                 // parse mime type from the content type header

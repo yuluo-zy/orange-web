@@ -9,6 +9,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::prelude::*;
+use bincode::Bounded;
 use cookie::{Cookie, CookieJar};
 use futures_util::future::{self, FutureExt, TryFutureExt};
 use hyper::header::SET_COOKIE;
@@ -16,12 +17,13 @@ use hyper::{Response, StatusCode};
 use log::{error, trace, warn};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use crate::body::Body;
 
 use super::cookie::CookieParser;
 use super::{Middleware, NewMiddleware};
 use crate::handler::{HandlerError, HandlerFuture, HandlerResult};
 use crate::helpers::http::response::create_empty_response;
-use crate::state::{self, FromState, State, StateData};
+use crate::state::{self, FromState, State};
 
 mod backend;
 mod rng;
@@ -31,6 +33,7 @@ pub use self::backend::{Backend, GetSessionFuture, NewBackend, SetSessionFuture}
 
 const SECURE_COOKIE_PREFIX: &str = "__Secure-";
 const HOST_COOKIE_PREFIX: &str = "__Host-";
+const SESSION_DEFAULT_SIZE: Bounded = Bounded(4096);
 
 /// Represents the session identifier which is held in the user agent's session cookie.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -371,11 +374,6 @@ where
     }
 }
 
-impl<T> StateData for SessionData<T> where
-    T: Default + Serialize + for<'de> Deserialize<'de> + Send + 'static
-{
-}
-
 impl<T> Deref for SessionData<T>
 where
     T: Default + Serialize + for<'de> Deserialize<'de> + Send + 'static,
@@ -387,16 +385,14 @@ where
     }
 }
 
-impl<T> Deref for SessionData<T>
-where
-    T: 'static + Default + Send + Serialize + for<'de> Deserialize<'de>,
-{
-    type Target = ();
 
-    fn deref(&self) -> &Self::Target {
-        todo!()
-    }
-}
+// impl<T> Deref for SessionData<T> where T: 'static + Default + Send + Serialize + for<'de> Deserialize<'de> {
+//     type Target = ();
+//
+//     fn deref(&self) -> &Self::Target {
+//         todo!()
+//     }
+// }
 
 impl<T> DerefMut for SessionData<T>
 where
@@ -408,7 +404,6 @@ where
     }
 }
 
-impl StateData for SessionDropData {}
 
 trait SessionTypePhantom<T>: Send + Sync + RefUnwindSafe
 where
@@ -938,7 +933,7 @@ fn write_session<T>(
 where
     T: Default + Serialize + for<'de> Deserialize<'de> + Send + 'static,
 {
-    let bytes = match bincode::serialize(&session_data.value) {
+    let bytes = match bincode::serialize(&session_data.value, SESSION_DEFAULT_SIZE) {
         Ok(bytes) => bytes,
         Err(e) => {
             error!(
