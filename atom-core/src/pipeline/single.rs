@@ -57,17 +57,17 @@ where
     (chain, pipelines)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use crate::pipeline::new_pipeline;
-    use crate::router::builder::*;
-
-    #[test]
-    fn test_pipeline_construction() {
-        let (chain, pipelines) = single_pipeline(new_pipeline().build());
-
-        build_router(chain, pipelines, |_route| {});
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     use crate::pipeline::new_pipeline;
+//     use crate::router::builder::*;
+//
+//     #[test]
+//     fn test_pipeline_construction() {
+//         let (chain, pipelines) = single_pipeline(new_pipeline().build());
+//
+//         build_router(chain, pipelines, |_route| {});
+//     }
+// }

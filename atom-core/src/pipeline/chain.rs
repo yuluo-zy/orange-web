@@ -58,7 +58,7 @@ where
     }
 }
 
-/// The marker for the end of a `PipelineHandleChain`.
+/// The marker for the end of a `PipelineHandleChain`. 末尾
 impl<P> PipelineHandleChain<P> for () {
     fn call<F>(&self, _: &PipelineSet<P>, state: State, f: F) -> Pin<Box<HandlerFuture>>
     where
