@@ -14,14 +14,14 @@ use crate::state::{request_id, State};
 /// This type should never be implemented outside of Gotham, does not form part of the public API,
 /// and is subject to change without notice.
 #[doc(hidden)]
-pub unsafe trait MiddlewareChainBuild: RefUnwindSafe + Sized {
+pub trait MiddlewareChainBuild: RefUnwindSafe + Sized {
     type Instance: MiddlewareChain;
 
     /// Create and return a new `MiddlewareChain` value.
     fn construct(&self) -> anyhow::Result<Self::Instance>;
 }
 
-unsafe impl<T, U> MiddlewareChainBuild for (T, U)
+impl<T, U> MiddlewareChainBuild for (T, U)
 where
     T: MiddlewareBuild,
     T::Instance: Send + 'static,
@@ -40,7 +40,7 @@ where
     }
 }
 
-unsafe impl MiddlewareChainBuild for () {
+impl MiddlewareChainBuild for () {
     type Instance = ();
 
     fn construct(&self) -> anyhow::Result<Self::Instance> {
@@ -105,7 +105,6 @@ where
         //
         // The resulting function is called by `<() as MiddlewareChain>::call`
         trace!("[{}] executing middleware", request_id(&state));
-        m.name();
         p.call(state, move |state| m.call(state, f))
     }
 }

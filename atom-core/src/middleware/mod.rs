@@ -321,10 +321,6 @@ pub trait Middleware {
     where
         Chain: FnOnce(State) -> Pin<Box<HandlerFuture>> + Send + 'static,
         Self: Sized;
-
-    fn name(&self) {
-        // trace!("{:?}", &self.fmt())
-    }
 }
 
 /// A type which is used to spawn new `Middleware` values. When implementing a `Middleware`, this
