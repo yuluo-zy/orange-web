@@ -1,8 +1,8 @@
 //! HTTP body utilities.
 
-use bytes::{ Bytes};
+use bytes::{BufMut, Bytes};
 use futures_util::stream::Stream;
-use futures_util::{ TryStream};
+use futures_util::{StreamExt, TryStream};
 use http_body::{Body as HttpBody, Frame};
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
@@ -20,7 +20,7 @@ where
     B: http_body::Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxError>,
 {
-    try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
+    try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new_box).boxed_unsync())
 }
 
 /// The body type used in requests and responses.
@@ -155,7 +155,7 @@ where
         let stream = self.project().stream.get_pin_mut();
         match futures_util::ready!(stream.try_poll_next(cx)) {
             Some(Ok(chunk)) => Poll::Ready(Some(Ok(Frame::data(chunk.into())))),
-            Some(Err(err)) => Poll::Ready(Some(Err(Error::new(err)))),
+            Some(Err(err)) => Poll::Ready(Some(Err(Error::new_box(err)))),
             None => Poll::Ready(None),
         }
     }

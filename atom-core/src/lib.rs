@@ -1,5 +1,5 @@
 pub mod body;
-pub mod error;
+
 pub mod extractor;
 pub mod handler;
 pub mod helpers;
@@ -11,6 +11,7 @@ pub mod service;
 pub mod state;
 pub mod tls;
 pub mod test;
+pub mod error;
 
 pub use anyhow;
 /// Re-export hyper
