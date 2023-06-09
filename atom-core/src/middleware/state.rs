@@ -6,7 +6,7 @@
 //! value to attach to the request state.
 use std::any::Any;
 use crate::handler::HandlerFuture;
-use crate::middleware::{Middleware, NewMiddleware};
+use crate::middleware::{Middleware, MiddlewareBuild};
 use crate::state::{State};
 use std::panic::RefUnwindSafe;
 use std::pin::Pin;
@@ -56,7 +56,7 @@ where
 }
 
 /// `NewMiddleware` trait implementation.
-impl<T> NewMiddleware for StateMiddleware<T>
+impl<T> MiddlewareBuild for StateMiddleware<T>
 where
     T: Clone + RefUnwindSafe + Any + Send + Sync,
 {

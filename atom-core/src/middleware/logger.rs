@@ -13,7 +13,7 @@ use std::pin::Pin;
 
 use crate::handler::HandlerFuture;
 use crate::helpers::timing::Timer;
-use crate::middleware::{Middleware, NewMiddleware};
+use crate::middleware::{Middleware, MiddlewareBuild};
 use crate::state::{client_addr, request_id, FromState, State};
 
 /// A struct that can act as a logging middleware for Gotham.
@@ -36,7 +36,7 @@ impl RequestLogger {
 ///
 /// This will simply dereference the internal state, rather than deriving `NewMiddleware`
 /// which will clone the structure - should be cheaper for repeated calls.
-impl NewMiddleware for RequestLogger {
+impl MiddlewareBuild for RequestLogger {
     type Instance = Self;
 
     /// Returns a new middleware to be used to serve a request.
@@ -134,7 +134,7 @@ impl SimpleLogger {
 ///
 /// This will simply dereference the internal state, rather than deriving `NewMiddleware`
 /// which will clone the structure - should be cheaper for repeated calls.
-impl NewMiddleware for SimpleLogger {
+impl MiddlewareBuild for SimpleLogger {
     type Instance = Self;
 
     /// Returns a new middleware to be used to serve a request.

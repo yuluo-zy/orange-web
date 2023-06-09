@@ -10,7 +10,6 @@ pub mod router;
 pub mod service;
 pub mod state;
 pub mod tls;
-pub mod derive;
 pub mod test;
 
 pub use anyhow;

@@ -13,7 +13,7 @@
 //! More may be added in future, but these headers provide compatibility with
 //! previous versions of Gotham.
 use crate::handler::HandlerFuture;
-use crate::middleware::{Middleware, NewMiddleware};
+use crate::middleware::{Middleware, MiddlewareBuild};
 use crate::state::State;
 
 use futures_util::future::{self, FutureExt, TryFutureExt};
@@ -55,7 +55,7 @@ impl Middleware for SecurityMiddleware {
 }
 
 /// `NewMiddleware` trait implementation.
-impl NewMiddleware for SecurityMiddleware {
+impl MiddlewareBuild for SecurityMiddleware {
     type Instance = Self;
 
     /// Clones the current middleware to a new instance.

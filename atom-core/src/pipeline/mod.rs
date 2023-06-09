@@ -13,8 +13,8 @@ use log::trace;
 use std::pin::Pin;
 
 use crate::handler::HandlerFuture;
-use crate::middleware::chain::{MiddlewareChain, NewMiddlewareChain};
-use crate::middleware::NewMiddleware;
+use crate::middleware::chain::{MiddlewareChain, MiddlewareChainBuild};
+use crate::middleware::MiddlewareBuild;
 use crate::state::{request_id, State};
 
 /// When using middleware, one or more `Middleware` are combined to form a `Pipeline`.
@@ -124,7 +124,7 @@ use crate::state::{request_id, State};
 /// ```
 pub struct Pipeline<T>
 where
-    T: NewMiddlewareChain,
+    T: MiddlewareChainBuild,
 {
     chain: T,
 }
@@ -139,10 +139,11 @@ where
 
 impl<T> Pipeline<T>
 where
-    T: NewMiddlewareChain,
+    T: MiddlewareChainBuild,
 {
     /// Constructs an instance of this `Pipeline` by creating all `Middleware` instances required
     /// to serve a request. If any middleware fails creation, its error will be returned.
+    /// 这个主要是用来将链式的 Chain Build 来转换成 MiddlewareChain
     fn construct(&self) -> anyhow::Result<PipelineInstance<T::Instance>> {
         Ok(PipelineInstance {
             chain: self.chain.construct()?,
@@ -177,7 +178,7 @@ pub fn new_pipeline() -> PipelineBuilder<()> {
 /// Constructs a pipeline from a single middleware.
 pub fn single_middleware<M>(m: M) -> Pipeline<(M, ())>
 where
-    M: NewMiddleware,
+    M: MiddlewareBuild,
     M::Instance: Send + 'static,
 {
     new_pipeline().add(m).build()
@@ -247,20 +248,20 @@ where
 /// `handler` (provided later, when building the router)
 pub struct PipelineBuilder<T>
 where
-    T: NewMiddlewareChain,
+    T: MiddlewareChainBuild,
 {
     t: T,
 }
 
 impl<T> PipelineBuilder<T>
 where
-    T: NewMiddlewareChain,
+    T: MiddlewareChainBuild,
 {
     /// Builds a `Pipeline`, which contains all middleware in the order provided via `add` and is
     /// ready to process requests via a `NewHandler` provided to `Pipeline::call`.
     pub fn build(self) -> Pipeline<T>
     where
-        T: NewMiddlewareChain,
+        T: MiddlewareChainBuild,
     {
         Pipeline { chain: self.t }
     }
@@ -268,7 +269,7 @@ where
     /// Adds a `NewMiddleware` which will create a `Middleware` during request dispatch.
     pub fn add<M>(self, m: M) -> PipelineBuilder<(M, T)>
     where
-        M: NewMiddleware,
+        M: MiddlewareBuild,
         M::Instance: Send + 'static,
         Self: Sized,
     {
@@ -285,6 +286,7 @@ where
         //
         //     PipelineBuilder { t: () }
         trace!(" adding middleware to pipeline");
+        // 这个结构体主要是用来创建链式的 MiddlewareBuild
         PipelineBuilder { t: (m, self.t) }
     }
 }

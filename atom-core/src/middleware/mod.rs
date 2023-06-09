@@ -3,6 +3,7 @@
 
 use std::panic::RefUnwindSafe;
 use std::pin::Pin;
+use log::{log, trace};
 
 use crate::handler::HandlerFuture;
 use crate::state::State;
@@ -56,7 +57,8 @@ pub use gotham_derive::NewMiddleware;
 /// }
 /// #
 /// # fn main() {
-/// #   let (chain, pipelines) = single_pipeline(
+/// #   use atom_core::pipeline::new_pipeline;
+/// let (chain, pipelines) = single_pipeline(
 /// #       new_pipeline()
 /// #           .add(NoopMiddleware)
 /// #           .build()
@@ -319,6 +321,10 @@ pub trait Middleware {
     where
         Chain: FnOnce(State) -> Pin<Box<HandlerFuture>> + Send + 'static,
         Self: Sized;
+
+    fn name(&self) {
+        // trace!("{:?}", &self.fmt())
+    }
 }
 
 /// A type which is used to spawn new `Middleware` values. When implementing a `Middleware`, this
@@ -361,7 +367,7 @@ pub trait Middleware {
 /// #   // Just for the implied type assertion.
 /// #   new_pipeline().add(MyMiddleware).build();
 /// # }
-pub trait NewMiddleware: Sync + RefUnwindSafe {
+pub trait MiddlewareBuild: Sync + RefUnwindSafe {
     /// The type of `Middleware` created by the `NewMiddleware`.
     type Instance: Middleware;
 

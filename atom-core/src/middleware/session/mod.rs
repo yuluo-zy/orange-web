@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::body::Body;
 
 use super::cookie::CookieParser;
-use super::{Middleware, NewMiddleware};
+use super::{Middleware, MiddlewareBuild};
 use crate::handler::{HandlerError, HandlerFuture, HandlerResult};
 use crate::helpers::http::response::create_empty_response;
 use crate::state::{self, FromState, State};
@@ -484,7 +484,7 @@ where
     phantom: PhantomData<T>,
 }
 
-impl<B, T> NewMiddleware for NewSessionMiddleware<B, T>
+impl<B, T> MiddlewareBuild for NewSessionMiddleware<B, T>
 where
     B: NewBackend,
     T: Default + Serialize + for<'de> Deserialize<'de> + Send + 'static,

@@ -8,7 +8,7 @@ use std::pin::Pin;
 
 use crate::handler::HandlerFuture;
 use crate::helpers::borrow_bag::{Handle, Lookup};
-use crate::middleware::chain::NewMiddlewareChain;
+use crate::middleware::chain::MiddlewareChainBuild;
 use crate::pipeline::set::PipelineSet;
 use crate::pipeline::Pipeline;
 use crate::state::{request_id, State};
@@ -37,7 +37,7 @@ pub trait PipelineHandleChain<P>: RefUnwindSafe {
 /// Part of a `PipelineHandleChain` which references a `Pipeline` and continues with a tail element.
 impl<P, T, N, U> PipelineHandleChain<P> for (Handle<Pipeline<T>, N>, U)
 where
-    T: NewMiddlewareChain,
+    T: MiddlewareChainBuild,
     T::Instance: Send + 'static,
     U: PipelineHandleChain<P>,
     P: Lookup<Pipeline<T>, N>,

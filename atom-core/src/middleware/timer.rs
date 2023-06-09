@@ -2,7 +2,7 @@
 use crate::handler::HandlerFuture;
 use crate::helpers::http::header::X_RUNTIME_DURATION;
 use crate::helpers::timing::Timer;
-use crate::middleware::{Middleware, NewMiddleware};
+use crate::middleware::{Middleware, MiddlewareBuild};
 use crate::state::State;
 use futures_util::future::{self, FutureExt, TryFutureExt};
 use std::pin::Pin;
@@ -40,7 +40,7 @@ impl Middleware for RequestTimer {
 }
 
 /// `NewMiddleware` trait implementation.
-impl NewMiddleware for RequestTimer {
+impl MiddlewareBuild for RequestTimer {
     type Instance = Self;
 
     /// Clones the current middleware to a new instance.

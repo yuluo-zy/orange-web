@@ -4,7 +4,7 @@ use std::pin::Pin;
 use cookie::{Cookie, CookieJar};
 use hyper::header::{HeaderMap, HeaderValue, COOKIE};
 
-use super::{Middleware, NewMiddleware};
+use super::{Middleware, MiddlewareBuild};
 use crate::handler::HandlerFuture;
 use crate::state::{FromState, State};
 
@@ -48,7 +48,7 @@ impl Middleware for CookieParser {
 }
 
 /// `NewMiddleware` trait implementation.
-impl NewMiddleware for CookieParser {
+impl MiddlewareBuild for CookieParser {
     type Instance = Self;
 
     /// Clones the current middleware to a new instance.

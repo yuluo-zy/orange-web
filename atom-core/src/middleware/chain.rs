@@ -6,7 +6,7 @@ use std::panic::RefUnwindSafe;
 use std::pin::Pin;
 
 use crate::handler::HandlerFuture;
-use crate::middleware::{Middleware, NewMiddleware};
+use crate::middleware::{Middleware, MiddlewareBuild};
 use crate::state::{request_id, State};
 
 /// A recursive type representing a pipeline, which is used to spawn a `MiddlewareChain`.
@@ -14,18 +14,18 @@ use crate::state::{request_id, State};
 /// This type should never be implemented outside of Gotham, does not form part of the public API,
 /// and is subject to change without notice.
 #[doc(hidden)]
-pub unsafe trait NewMiddlewareChain: RefUnwindSafe + Sized {
+pub unsafe trait MiddlewareChainBuild: RefUnwindSafe + Sized {
     type Instance: MiddlewareChain;
 
     /// Create and return a new `MiddlewareChain` value.
     fn construct(&self) -> anyhow::Result<Self::Instance>;
 }
 
-unsafe impl<T, U> NewMiddlewareChain for (T, U)
+unsafe impl<T, U> MiddlewareChainBuild for (T, U)
 where
-    T: NewMiddleware,
+    T: MiddlewareBuild,
     T::Instance: Send + 'static,
-    U: NewMiddlewareChain,
+    U: MiddlewareChainBuild,
 {
     type Instance = (T::Instance, U::Instance);
 
@@ -40,7 +40,7 @@ where
     }
 }
 
-unsafe impl NewMiddlewareChain for () {
+unsafe impl MiddlewareChainBuild for () {
     type Instance = ();
 
     fn construct(&self) -> anyhow::Result<Self::Instance> {
@@ -56,14 +56,14 @@ unsafe impl NewMiddlewareChain for () {
 /// This type should never be implemented outside of Gotham, does not form part of the public API,
 /// and is subject to change without notice.
 #[doc(hidden)]
-pub unsafe trait MiddlewareChain: Sized {
+pub trait MiddlewareChain: Sized {
     /// Recursive function for processing middleware and chaining to the given function.
     fn call<F>(self, state: State, f: F) -> Pin<Box<HandlerFuture>>
     where
         F: FnOnce(State) -> Pin<Box<HandlerFuture>> + Send + 'static;
 }
 
-unsafe impl MiddlewareChain for () {
+impl MiddlewareChain for () {
     fn call<F>(self, state: State, f: F) -> Pin<Box<HandlerFuture>>
     where
         F: FnOnce(State) -> Pin<Box<HandlerFuture>> + Send + 'static,
@@ -78,7 +78,7 @@ unsafe impl MiddlewareChain for () {
     }
 }
 
-unsafe impl<T, U> MiddlewareChain for (T, U)
+impl<T, U> MiddlewareChain for (T, U)
 where
     T: Middleware + Send + 'static,
     U: MiddlewareChain,
@@ -88,6 +88,7 @@ where
         F: FnOnce(State) -> Pin<Box<HandlerFuture>> + Send + 'static,
     {
         let (m, p) = self;
+        // TODO: 加入顺序问题
         // Construct the function from the inside, out. Starting with a function which calls the
         // `Handler`, and then creating a new function which calls the `Middleware` with the
         // previous function as the `chain` argument, we end up with a structure somewhat like
@@ -104,6 +105,7 @@ where
         //
         // The resulting function is called by `<() as MiddlewareChain>::call`
         trace!("[{}] executing middleware", request_id(&state));
+        m.name();
         p.call(state, move |state| m.call(state, f))
     }
 }

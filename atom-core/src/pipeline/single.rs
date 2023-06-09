@@ -1,7 +1,7 @@
 //! Defines helpers for applications that only require a single pipeline (i.e. only one set of
 //! middleware for the application).
 
-use super::{finalize_pipeline_set, new_pipeline_set, NewMiddlewareChain, Pipeline, PipelineSet};
+use super::{finalize_pipeline_set, new_pipeline_set, MiddlewareChainBuild, Pipeline, PipelineSet};
 use crate::helpers::borrow_bag::{Append, Handle};
 
 /// A `PipelineSet` which contains only a single pipeline.
@@ -46,9 +46,10 @@ pub type SinglePipelineChain<C> = (SinglePipelineHandle<C>, ());
 /// ```
 pub fn single_pipeline<C>(c: Pipeline<C>) -> (SinglePipelineChain<C>, SinglePipelineSet<C>)
 where
-    C: NewMiddlewareChain,
+    C: MiddlewareChainBuild,
 {
     let pipelines = new_pipeline_set();
+    // 这里主要是添加的 ChinaBuild 而不是对应的实例
     let (pipelines, single) = pipelines.add(c);
     let pipelines = finalize_pipeline_set(pipelines);
 
