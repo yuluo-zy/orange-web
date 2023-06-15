@@ -39,3 +39,5 @@ sync_wrapper = "0.1.1"
 
 tokio = { version = "1.28", features = ["net", "rt-multi-thread", "time", "fs", "io-util"] }
 
+crossbeam-epoch = "0.9.13"
+

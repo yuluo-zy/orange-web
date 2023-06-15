@@ -1,3 +1,5 @@
+#![feature(allocator_api)]
+
 pub mod body;
 
 pub mod extractor;

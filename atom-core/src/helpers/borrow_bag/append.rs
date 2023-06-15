@@ -27,7 +27,7 @@ pub trait Append<T> {
     ///
     /// If the output type is `(X, (Y, (Z, ())))`, we're adding the `Z` and so our `Navigator` will
     /// be `(Skip, (Skip, Take))`
-    type Navigator;
+    type Navigator; // 这里的Navigator 可以是 Take 或者 (Skip, (Skip, Take))
 
     /// Append the element, returning a new collection and a handle to borrow the element back.
     fn append(self, t: T) -> (Self::Output, Handle<T, Self::Navigator>);
@@ -65,7 +65,7 @@ where
 
 impl<U> PrefixedWith<()> for (U, ()) {}
 
-impl<U, V0, V1> PrefixedWith<(U, V0)> for (U, V1) where V1: PrefixedWith<V0> {}
+impl<U, T, V> PrefixedWith<(U, T)> for (U, V) where V: PrefixedWith<T> {}
 
 #[cfg(test)]
 mod tests {

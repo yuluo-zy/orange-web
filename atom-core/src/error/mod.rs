@@ -81,9 +81,7 @@ impl Display for Error {
     }
 }
 
-impl StdError for Error {
-
-}
+impl StdError for Error {}
 
 pub struct Source<'a> {
     next: Option<&'a Error>,

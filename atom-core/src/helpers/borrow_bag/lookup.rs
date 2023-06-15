@@ -29,9 +29,7 @@ pub trait Lookup<T, N> {
 }
 
 #[doc(hidden)]
-impl<T, U, V, N> Lookup<T, (Skip, N)> for (U, V)
-where
-    V: Lookup<T, N>,
+impl<T, U, N, V: Lookup<T, N>> Lookup<T, (Skip, N)> for (U, V)
 {
     fn get_from(&self) -> &T {
         self.1.get_from()

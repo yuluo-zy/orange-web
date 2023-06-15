@@ -80,6 +80,7 @@ impl<V> BorrowBag<V> {
     where
         V: Append<T>,
     {
+        // 首先调用 （）的 append
         let (v, handle) = Append::append(self.v, t);
         (BorrowBag { v }, handle)
     }
@@ -100,5 +101,20 @@ impl<V> BorrowBag<V> {
         V: Lookup<T, N>,
     {
         Lookup::<T, N>::get_from(&self.v)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::io;
+    use thiserror::Error;
+
+    #[test]
+    fn test_error_downcast() {
+         let bag = BorrowBag::new();
+         let (bag, handle) = bag.add(15u8);
+        let i: &u8 = bag.borrow(handle);
     }
 }

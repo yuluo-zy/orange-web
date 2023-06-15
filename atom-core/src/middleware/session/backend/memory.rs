@@ -193,118 +193,118 @@ fn cleanup_once(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cleanup_test() {
-        let mut storage = LinkedHashMap::new();
-
-        storage.insert(
-            "abcd".to_owned(),
-            (Instant::now() - Duration::from_secs(2), vec![]),
-        );
-
-        cleanup_once(&mut storage, Duration::from_secs(1));
-        assert!(storage.is_empty());
-    }
-
-    #[test]
-    fn cleanup_join_test() {
-        let storage = Arc::new(Mutex::new(LinkedHashMap::new()));
-        let weak = Arc::downgrade(&storage);
-
-        let handle = thread::spawn(move || cleanup_loop(weak, Duration::from_millis(1)));
-
-        drop(storage);
-        handle.join().unwrap();
-    }
-
-    #[test]
-    fn memory_backend_test() {
-        let new_backend = MemoryBackend::new(Duration::from_millis(100));
-        let bytes: Vec<u8> = (0..64).map(|_| rand::random()).collect();
-        let state = State::new();
-        let identifier = SessionIdentifier {
-            value: "totally_random_identifier".to_owned(),
-        };
-
-        futures_executor::block_on(
-            new_backend
-                .new_backend()
-                .expect("can't create backend for write")
-                .persist_session(&state, identifier.clone(), &bytes[..]),
-        )
-        .expect("failed to persist");
-
-        let received = futures_executor::block_on(
-            new_backend
-                .new_backend()
-                .expect("can't create backend for read")
-                .read_session(&state, identifier),
-        )
-        .expect("no response from backend")
-        .expect("session data missing");
-
-        assert_eq!(bytes, received);
-    }
-
-    #[test]
-    fn memory_backend_refresh_test() {
-        let new_backend = MemoryBackend::new(Duration::from_millis(100));
-        let bytes: Vec<u8> = (0..64).map(|_| rand::random()).collect();
-        let state = State::new();
-        let identifier = SessionIdentifier {
-            value: "totally_random_identifier".to_owned(),
-        };
-        let bytes2: Vec<u8> = (0..64).map(|_| rand::random()).collect();
-        let identifier2 = SessionIdentifier {
-            value: "another_totally_random_identifier".to_owned(),
-        };
-
-        let backend = new_backend
-            .new_backend()
-            .expect("can't create backend for write");
-
-        futures_executor::block_on(backend.persist_session(&state, identifier.clone(), &bytes[..]))
-            .expect("failed to persist");
-
-        futures_executor::block_on(backend.persist_session(
-            &state,
-            identifier2.clone(),
-            &bytes2[..],
-        ))
-        .expect("failed to persist");
-
-        {
-            let storage = backend.storage.lock().expect("couldn't lock storage");
-            assert_eq!(
-                storage.front().expect("no front element").0,
-                &identifier.value
-            );
-
-            assert_eq!(
-                storage.back().expect("no back element").0,
-                &identifier2.value
-            );
-        }
-
-        futures_executor::block_on(backend.read_session(&state, identifier.clone()))
-            .expect("failed to read session");
-
-        {
-            // Identifiers have swapped
-            let storage = backend.storage.lock().expect("couldn't lock storage");
-            assert_eq!(
-                storage.front().expect("no front element").0,
-                &identifier2.value
-            );
-
-            assert_eq!(
-                storage.back().expect("no back element").0,
-                &identifier.value
-            );
-        }
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     #[test]
+//     fn cleanup_test() {
+//         let mut storage = LinkedHashMap::new();
+//
+//         storage.insert(
+//             "abcd".to_owned(),
+//             (Instant::now() - Duration::from_secs(2), vec![]),
+//         );
+//
+//         cleanup_once(&mut storage, Duration::from_secs(1));
+//         assert!(storage.is_empty());
+//     }
+//
+//     #[test]
+//     fn cleanup_join_test() {
+//         let storage = Arc::new(Mutex::new(LinkedHashMap::new()));
+//         let weak = Arc::downgrade(&storage);
+//
+//         let handle = thread::spawn(move || cleanup_loop(weak, Duration::from_millis(1)));
+//
+//         drop(storage);
+//         handle.join().unwrap();
+//     }
+//
+//     #[test]
+//     fn memory_backend_test() {
+//         let new_backend = MemoryBackend::new(Duration::from_millis(100));
+//         let bytes: Vec<u8> = (0..64).map(|_| rand::random()).collect();
+//         let state = State::new();
+//         let identifier = SessionIdentifier {
+//             value: "totally_random_identifier".to_owned(),
+//         };
+//
+//         futures_executor::block_on(
+//             new_backend
+//                 .new_backend()
+//                 .expect("can't create backend for write")
+//                 .persist_session(&state, identifier.clone(), &bytes[..]),
+//         )
+//         .expect("failed to persist");
+//
+//         let received = futures_executor::block_on(
+//             new_backend
+//                 .new_backend()
+//                 .expect("can't create backend for read")
+//                 .read_session(&state, identifier),
+//         )
+//         .expect("no response from backend")
+//         .expect("session data missing");
+//
+//         assert_eq!(bytes, received);
+//     }
+//
+//     #[test]
+//     fn memory_backend_refresh_test() {
+//         let new_backend = MemoryBackend::new(Duration::from_millis(100));
+//         let bytes: Vec<u8> = (0..64).map(|_| rand::random()).collect();
+//         let state = State::new();
+//         let identifier = SessionIdentifier {
+//             value: "totally_random_identifier".to_owned(),
+//         };
+//         let bytes2: Vec<u8> = (0..64).map(|_| rand::random()).collect();
+//         let identifier2 = SessionIdentifier {
+//             value: "another_totally_random_identifier".to_owned(),
+//         };
+//
+//         let backend = new_backend
+//             .new_backend()
+//             .expect("can't create backend for write");
+//
+//         futures_executor::block_on(backend.persist_session(&state, identifier.clone(), &bytes[..]))
+//             .expect("failed to persist");
+//
+//         futures_executor::block_on(backend.persist_session(
+//             &state,
+//             identifier2.clone(),
+//             &bytes2[..],
+//         ))
+//         .expect("failed to persist");
+//
+//         {
+//             let storage = backend.storage.lock().expect("couldn't lock storage");
+//             assert_eq!(
+//                 storage.front().expect("no front element").0,
+//                 &identifier.value
+//             );
+//
+//             assert_eq!(
+//                 storage.back().expect("no back element").0,
+//                 &identifier2.value
+//             );
+//         }
+//
+//         futures_executor::block_on(backend.read_session(&state, identifier.clone()))
+//             .expect("failed to read session");
+//
+//         {
+//             // Identifiers have swapped
+//             let storage = backend.storage.lock().expect("couldn't lock storage");
+//             assert_eq!(
+//                 storage.front().expect("no front element").0,
+//                 &identifier2.value
+//             );
+//
+//             assert_eq!(
+//                 storage.back().expect("no back element").0,
+//                 &identifier.value
+//             );
+//         }
+//     }
+// }

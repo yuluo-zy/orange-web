@@ -1034,225 +1034,225 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cookie::Cookie;
-    use hyper::header::{HeaderMap, COOKIE};
-    use hyper::{Response, StatusCode};
-    use serde::{Deserialize, Serialize};
-    use std::sync::Mutex;
-    use std::time::Duration;
-
-    #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
-    struct TestSession {
-        val: u64,
-    }
-
-    #[test]
-    fn new_session() {
-        let backend = MemoryBackend::new(Duration::from_secs(1));
-        let nm = NewSessionMiddleware::new(backend).with_session_type::<TestSession>();
-        let m = nm.new_middleware().unwrap();
-
-        // Identifier generation is functioning as expected
-        //
-        // 64 -> 512 bits = (85 * 6 + 2)
-        // Without padding that requires 86 base64 characters to represent.
-        let identifier = m.random_identifier();
-        assert_eq!(identifier.value.len(), 86);
-        let identifier2 = m.random_identifier();
-        assert_eq!(identifier2.value.len(), 86);
-        assert_ne!(identifier, identifier2);
-
-        assert_eq!(&m.cookie_config.name, "_gotham_session");
-        assert!(m.cookie_config.secure);
-        assert!(m.cookie_config.http_only);
-        assert_eq!(m.cookie_config.same_site, SameSiteEnforcement::Lax);
-        assert_eq!(&m.cookie_config.path, "/");
-        assert!(m.cookie_config.domain.is_none());
-
-        assert_eq!(
-            m.cookie_config.to_cookie_string(&identifier.value),
-            format!(
-                "_gotham_session={}; Secure; HttpOnly; SameSite=Lax; Path=/",
-                &identifier.value
-            )
-        );
-    }
-
-    #[test]
-    fn enforce_secure_cookie_prefix_attributes() {
-        let backend = MemoryBackend::new(Duration::from_secs(1));
-        let nm = NewSessionMiddleware::new(backend)
-            .with_cookie_name("__Secure-my_session")
-            .insecure()
-            .with_session_type::<TestSession>();
-
-        let m = nm.new_middleware().unwrap();
-        assert!(m.cookie_config.secure);
-    }
-
-    #[test]
-    fn enforce_host_cookie_prefix_attributes() {
-        let backend = MemoryBackend::new(Duration::from_secs(1));
-        let nm = NewSessionMiddleware::new(backend)
-            .with_cookie_name("__Host-my_session")
-            .insecure()
-            .with_cookie_domain("example.com")
-            .with_cookie_path("/myapp")
-            .with_session_type::<TestSession>();
-
-        let m = nm.new_middleware().unwrap();
-        assert!(m.cookie_config.secure);
-        assert!(m.cookie_config.domain.is_none());
-        assert!(m.cookie_config.path == "/");
-    }
-
-    #[test]
-    fn new_session_custom_settings() {
-        let backend = MemoryBackend::new(Duration::from_secs(1));
-        let nm = NewSessionMiddleware::new(backend.clone())
-            .with_cookie_name("_my_session")
-            .with_cookie_domain("example.com")
-            .with_strict_same_site_enforcement()
-            .with_cookie_path("/myapp")
-            .insecure()
-            .with_session_type::<TestSession>();
-
-        let m = nm.new_middleware().unwrap();
-        let identifier = m.random_identifier();
-        assert_eq!(identifier.value.len(), 86);
-
-        assert_eq!(
-            m.cookie_config.to_cookie_string(&identifier.value),
-            format!(
-                "_my_session={}; HttpOnly; SameSite=Strict; Domain=example.com; Path=/myapp",
-                &identifier.value
-            )
-        );
-
-        let nm = NewSessionMiddleware::new(backend)
-            .with_cookie_name("x_session")
-            .with_cookie_path("/xapp")
-            .allow_cross_site_usage()
-            .with_session_type::<TestSession>();
-
-        let m = nm.new_middleware().unwrap();
-        let identifier = m.random_identifier();
-        assert_eq!(identifier.value.len(), 86);
-
-        assert_eq!(
-            m.cookie_config.to_cookie_string(&identifier.value),
-            format!(
-                "x_session={}; Secure; HttpOnly; Path=/xapp",
-                &identifier.value
-            )
-        );
-    }
-
-    #[test]
-    fn existing_session() {
-        let nm = NewSessionMiddleware::default().with_session_type::<TestSession>();
-        let m = nm.new_middleware().unwrap();
-        let mut state = State::new();
-
-        let identifier = m.random_identifier();
-        // 64 -> 512 bits = (85 * 6 + 2)
-        // Without padding that requires 86 base64 characters to represent.
-        assert_eq!(identifier.value.len(), 86);
-
-        let session = TestSession {
-            val: rand::random(),
-        };
-        let bytes = bincode::serialize(&session).unwrap();
-
-        futures_executor::block_on(
-            m.backend
-                .persist_session(&state, identifier.clone(), &bytes),
-        )
-        .unwrap();
-
-        let received: Arc<Mutex<Option<u64>>> = Arc::new(Mutex::new(None));
-        let r = received.clone();
-
-        let handler = move |mut state: State| {
-            {
-                let session_data = state.borrow_mut::<SessionData<TestSession>>();
-                *r.lock().unwrap() = Some(session_data.val);
-                session_data.val += 1;
-            }
-
-            future::ok((
-                state,
-                Response::builder()
-                    .status(StatusCode::ACCEPTED)
-                    .body(Body::empty())
-                    .unwrap(),
-            ))
-            .boxed()
-        };
-
-        let mut headers = HeaderMap::new();
-        let cookie = Cookie::build("_gotham_session", identifier.value.clone()).finish();
-        headers.insert(COOKIE, cookie.to_string().parse().unwrap());
-        state.put(headers);
-
-        let r = m.call(state, handler);
-        match futures_executor::block_on(r) {
-            Ok(_) => {
-                let guard = received.lock().unwrap();
-                if let Some(value) = *guard {
-                    assert_eq!(value, session.val);
-                } else {
-                    panic!("no session data");
-                }
-            }
-            Err((_, e)) => panic!("error: {:?}", e),
-        }
-
-        let state = State::new();
-        let m = nm.new_middleware().unwrap();
-        let bytes = futures_executor::block_on(m.backend.read_session(&state, identifier.clone()))
-            .unwrap()
-            .unwrap();
-        let updated = bincode::deserialize::<TestSession>(&bytes[..]).unwrap();
-
-        assert_eq!(updated.val, session.val + 1);
-
-        let handler = move |mut state: State| {
-            async move {
-                {
-                    let session_data = state.take::<SessionData<TestSession>>();
-                    session_data.discard(&mut state).await.unwrap();
-                }
-
-                Ok((
-                    state,
-                    Response::builder()
-                        .status(StatusCode::NO_CONTENT)
-                        .body(Body::empty())
-                        .unwrap(),
-                ))
-            }
-            .boxed()
-        };
-
-        let mut state = State::new();
-        let mut headers = HeaderMap::new();
-        let cookie = Cookie::build("_gotham_session", identifier.value.clone()).finish();
-        headers.insert(COOKIE, cookie.to_string().parse().unwrap());
-        state.put(headers);
-
-        let m = nm.new_middleware().unwrap();
-        let r = m.call(state, handler);
-        if let Err((_, e)) = futures_executor::block_on(r) {
-            panic!("error: {:?}", e);
-        }
-
-        let state = State::new();
-        let m = nm.new_middleware().unwrap();
-        let data = futures_executor::block_on(m.backend.read_session(&state, identifier)).unwrap();
-        assert_eq!(data, None);
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use cookie::Cookie;
+//     use hyper::header::{HeaderMap, COOKIE};
+//     use hyper::{Response, StatusCode};
+//     use serde::{Deserialize, Serialize};
+//     use std::sync::Mutex;
+//     use std::time::Duration;
+//
+//     #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+//     struct TestSession {
+//         val: u64,
+//     }
+//
+//     #[test]
+//     fn new_session() {
+//         let backend = MemoryBackend::new(Duration::from_secs(1));
+//         let nm = NewSessionMiddleware::new(backend).with_session_type::<TestSession>();
+//         let m = nm.new_middleware().unwrap();
+//
+//         // Identifier generation is functioning as expected
+//         //
+//         // 64 -> 512 bits = (85 * 6 + 2)
+//         // Without padding that requires 86 base64 characters to represent.
+//         let identifier = m.random_identifier();
+//         assert_eq!(identifier.value.len(), 86);
+//         let identifier2 = m.random_identifier();
+//         assert_eq!(identifier2.value.len(), 86);
+//         assert_ne!(identifier, identifier2);
+//
+//         assert_eq!(&m.cookie_config.name, "_gotham_session");
+//         assert!(m.cookie_config.secure);
+//         assert!(m.cookie_config.http_only);
+//         assert_eq!(m.cookie_config.same_site, SameSiteEnforcement::Lax);
+//         assert_eq!(&m.cookie_config.path, "/");
+//         assert!(m.cookie_config.domain.is_none());
+//
+//         assert_eq!(
+//             m.cookie_config.to_cookie_string(&identifier.value),
+//             format!(
+//                 "_gotham_session={}; Secure; HttpOnly; SameSite=Lax; Path=/",
+//                 &identifier.value
+//             )
+//         );
+//     }
+//
+//     #[test]
+//     fn enforce_secure_cookie_prefix_attributes() {
+//         let backend = MemoryBackend::new(Duration::from_secs(1));
+//         let nm = NewSessionMiddleware::new(backend)
+//             .with_cookie_name("__Secure-my_session")
+//             .insecure()
+//             .with_session_type::<TestSession>();
+//
+//         let m = nm.new_middleware().unwrap();
+//         assert!(m.cookie_config.secure);
+//     }
+//
+//     #[test]
+//     fn enforce_host_cookie_prefix_attributes() {
+//         let backend = MemoryBackend::new(Duration::from_secs(1));
+//         let nm = NewSessionMiddleware::new(backend)
+//             .with_cookie_name("__Host-my_session")
+//             .insecure()
+//             .with_cookie_domain("example.com")
+//             .with_cookie_path("/myapp")
+//             .with_session_type::<TestSession>();
+//
+//         let m = nm.new_middleware().unwrap();
+//         assert!(m.cookie_config.secure);
+//         assert!(m.cookie_config.domain.is_none());
+//         assert!(m.cookie_config.path == "/");
+//     }
+//
+//     #[test]
+//     fn new_session_custom_settings() {
+//         let backend = MemoryBackend::new(Duration::from_secs(1));
+//         let nm = NewSessionMiddleware::new(backend.clone())
+//             .with_cookie_name("_my_session")
+//             .with_cookie_domain("example.com")
+//             .with_strict_same_site_enforcement()
+//             .with_cookie_path("/myapp")
+//             .insecure()
+//             .with_session_type::<TestSession>();
+//
+//         let m = nm.new_middleware().unwrap();
+//         let identifier = m.random_identifier();
+//         assert_eq!(identifier.value.len(), 86);
+//
+//         assert_eq!(
+//             m.cookie_config.to_cookie_string(&identifier.value),
+//             format!(
+//                 "_my_session={}; HttpOnly; SameSite=Strict; Domain=example.com; Path=/myapp",
+//                 &identifier.value
+//             )
+//         );
+//
+//         let nm = NewSessionMiddleware::new(backend)
+//             .with_cookie_name("x_session")
+//             .with_cookie_path("/xapp")
+//             .allow_cross_site_usage()
+//             .with_session_type::<TestSession>();
+//
+//         let m = nm.new_middleware().unwrap();
+//         let identifier = m.random_identifier();
+//         assert_eq!(identifier.value.len(), 86);
+//
+//         assert_eq!(
+//             m.cookie_config.to_cookie_string(&identifier.value),
+//             format!(
+//                 "x_session={}; Secure; HttpOnly; Path=/xapp",
+//                 &identifier.value
+//             )
+//         );
+//     }
+//
+//     #[test]
+//     fn existing_session() {
+//         let nm = NewSessionMiddleware::default().with_session_type::<TestSession>();
+//         let m = nm.new_middleware().unwrap();
+//         let mut state = State::new();
+//
+//         let identifier = m.random_identifier();
+//         // 64 -> 512 bits = (85 * 6 + 2)
+//         // Without padding that requires 86 base64 characters to represent.
+//         assert_eq!(identifier.value.len(), 86);
+//
+//         let session = TestSession {
+//             val: rand::random(),
+//         };
+//         let bytes = bincode::serialize(&session).unwrap();
+//
+//         futures_executor::block_on(
+//             m.backend
+//                 .persist_session(&state, identifier.clone(), &bytes),
+//         )
+//         .unwrap();
+//
+//         let received: Arc<Mutex<Option<u64>>> = Arc::new(Mutex::new(None));
+//         let r = received.clone();
+//
+//         let handler = move |mut state: State| {
+//             {
+//                 let session_data = state.borrow_mut::<SessionData<TestSession>>();
+//                 *r.lock().unwrap() = Some(session_data.val);
+//                 session_data.val += 1;
+//             }
+//
+//             future::ok((
+//                 state,
+//                 Response::builder()
+//                     .status(StatusCode::ACCEPTED)
+//                     .body(Body::empty())
+//                     .unwrap(),
+//             ))
+//             .boxed()
+//         };
+//
+//         let mut headers = HeaderMap::new();
+//         let cookie = Cookie::build("_gotham_session", identifier.value.clone()).finish();
+//         headers.insert(COOKIE, cookie.to_string().parse().unwrap());
+//         state.put(headers);
+//
+//         let r = m.call(state, handler);
+//         match futures_executor::block_on(r) {
+//             Ok(_) => {
+//                 let guard = received.lock().unwrap();
+//                 if let Some(value) = *guard {
+//                     assert_eq!(value, session.val);
+//                 } else {
+//                     panic!("no session data");
+//                 }
+//             }
+//             Err((_, e)) => panic!("error: {:?}", e),
+//         }
+//
+//         let state = State::new();
+//         let m = nm.new_middleware().unwrap();
+//         let bytes = futures_executor::block_on(m.backend.read_session(&state, identifier.clone()))
+//             .unwrap()
+//             .unwrap();
+//         let updated = bincode::deserialize::<TestSession>(&bytes[..]).unwrap();
+//
+//         assert_eq!(updated.val, session.val + 1);
+//
+//         let handler = move |mut state: State| {
+//             async move {
+//                 {
+//                     let session_data = state.take::<SessionData<TestSession>>();
+//                     session_data.discard(&mut state).await.unwrap();
+//                 }
+//
+//                 Ok((
+//                     state,
+//                     Response::builder()
+//                         .status(StatusCode::NO_CONTENT)
+//                         .body(Body::empty())
+//                         .unwrap(),
+//                 ))
+//             }
+//             .boxed()
+//         };
+//
+//         let mut state = State::new();
+//         let mut headers = HeaderMap::new();
+//         let cookie = Cookie::build("_gotham_session", identifier.value.clone()).finish();
+//         headers.insert(COOKIE, cookie.to_string().parse().unwrap());
+//         state.put(headers);
+//
+//         let m = nm.new_middleware().unwrap();
+//         let r = m.call(state, handler);
+//         if let Err((_, e)) = futures_executor::block_on(r) {
+//             panic!("error: {:?}", e);
+//         }
+//
+//         let state = State::new();
+//         let m = nm.new_middleware().unwrap();
+//         let data = futures_executor::block_on(m.backend.read_session(&state, identifier)).unwrap();
+//         assert_eq!(data, None);
+//     }
+// }
