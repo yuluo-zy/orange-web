@@ -8,7 +8,7 @@ use serde::de::StdError;
 use crate::error;
 use crate::error::Error;
 use crate::router::tree::art::ArtAllocator;
-use crate::router::tree::art::node::node::{NODE16TYPE, NODE256TYPE, NODE48TYPE, NODE4TYPE};
+use crate::router::tree::art::node::node::{Node16, NODE16TYPE, NODE256TYPE, Node4, NODE48TYPE, NODE4TYPE};
 
 const MAX_KEY_LEN: usize = 8;
 
@@ -49,6 +49,7 @@ impl NodeType {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct NodePtr {
     pub node_id: usize,
     pub sub_node: *const BaseNode,
@@ -118,13 +119,24 @@ impl BaseNode {
         self.meta.node_prefix[..self.meta.prefix_size as usize].as_ref()
     }
 
-    pub fn insert() {
-
-    }
-
-    pub fn insert_inner() {
-
-    }
+    // pub fn insert<K,V>(&self, value: (K,V), art_allocator: Arc<ArtAllocator>) -> Result<(), Error> {
+    //     match self.get_type() {
+    //         NodeType::Node4 => self.insert_inner<Node4, Node16>(value, art_allocator),
+    //
+    //         NodeType::Node16 =>  self.insert_inner<Node4, Node16>(value, art_allocator),
+    //         NodeType::Node48 =>self.insert_inner<Node4, Node16>(value, art_allocator),
+    //         NodeType::Node256 => self.insert_inner<Node4, Node16>(value, art_allocator),
+    //     }
+    //     Ok(())
+    // }
+    //
+    // pub fn insert_inner<CurT: NodeTrait, BiggerT: NodeTrait> (
+    //     &self,
+    //     value: (K,V),
+    //     art_allocator: Arc<ArtAllocator>
+    // ) -> Result<(), Error> {
+    //
+    // }
 
 
 
