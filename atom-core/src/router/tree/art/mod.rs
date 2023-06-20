@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::router::tree::art::tree::RawTree;
 
 mod tree;
-mod node;
+pub mod node;
 
 /// readme
 /// https://zhuanlan.zhihu.com/p/142407392 实现相关文件
@@ -35,17 +35,28 @@ unsafe impl Allocator for ArtAllocator {
         std::alloc::dealloc(ptr.as_ptr(), layout);
     }
 }
-pub(crate) trait ArtKey: Default {
-    fn get_bytes(&self) -> &[u8];
-    fn get_mut_bytes(&mut self) -> &mut [u8];
+pub trait TreeKeyTrait {
+    fn len(&self) -> usize;
+
+    fn as_bytes(&self) -> &[u8];
 }
-pub(crate) struct ArtTree<K,V> where K: ArtKey {
+
+impl TreeKeyTrait for String {
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+pub(crate) struct ArtTree<K,V> where K: TreeKeyTrait {
     inner: RawTree<K,V>,
     pr_key: PhantomData<K>,
     pr_value: PhantomData<V>
 }
 
-impl<K: ArtKey, V> Default for ArtTree<K, V> {
+impl<K: TreeKeyTrait, V> Default for ArtTree<K, V> {
     fn default() -> Self {
        todo!()
     }

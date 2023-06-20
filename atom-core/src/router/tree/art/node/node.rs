@@ -383,7 +383,7 @@ impl Node48 {
         }
     }
 }
-impl Node for Node48 {
+impl NodeTrait for Node48 {
     fn get_type() -> NodeType {
         NodeType::Node48
     }
@@ -552,7 +552,7 @@ impl NodeTrait for Node256 {
         self.base.meta.count -= 1;
     }
 
-    fn copy_to<N: Node>(&self, dst: &mut N) {
+    fn copy_to<N: NodeTrait>(&self, dst: &mut N) {
         for (i, c) in self.children.iter().enumerate() {
             if self.get_mask(i) {
                 dst.insert(i as u8, *c);

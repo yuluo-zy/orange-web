@@ -1,4 +1,4 @@
-mod node;
+pub mod node;
 
 use std::{alloc, ptr};
 use std::alloc::{Allocator, Layout, LayoutError};
@@ -78,6 +78,7 @@ impl NodePtr {
 
 pub struct BaseNode {
     // 版本内容， 用来实现乐观锁
+    // 2b type | 60b version | 1b lock | 1b obsolete
     pub type_version: AtomicUsize,
     pub meta: NodeMeta,
 }
@@ -139,6 +140,12 @@ impl BaseNode {
     pub fn prefix(&self) -> &[u8] {
         self.meta.node_prefix[..self.meta.prefix_size as usize].as_ref()
     }
+
+    // pub(crate) unsafe fn drop_node<A: Allocator>(node: *mut BaseNode, allocator: A) {
+    //     let layout = (*node).get_type().node_layout();
+    //     let ptr = ptr::NonNull::new(node as *mut u8).unwrap();
+    //     allocator.deallocate(ptr, layout);
+    // }
 
     // pub fn insert<K,V>(&self, value: (K,V), art_allocator: Arc<ArtAllocator>) -> Result<(), Error> {
     //     match self.get_type() {
