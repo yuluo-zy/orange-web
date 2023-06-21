@@ -46,59 +46,68 @@ impl NodeTrait for Node4 {
         self.base.meta.count == 4
     }
 
-    fn insert(&mut self, key: u8, node: NodePtr) {
-        let mut pos: usize = 0;
+    fn insert<K: TreeKeyTrait, V>(&mut self, key: u8, node: NodeLeaf<K, V>) {
+            let mut pos: usize = 0;
 
-        while (pos as u16) < self.base.meta.count {
-            // todo 二分查找， 默认有序 从小到大
-            if self.keys[pos] < key {
-                pos += 1;
-                continue;
-            } else {
-                break;
+            while (pos as u16) < self.base.meta.count {
+                // todo 二分查找， 默认有序 从小到大
+                if self.keys[pos] < key {
+                    pos += 1;
+                    continue;
+                } else {
+                    break;
+                }
             }
-        }
 
-        unsafe {
-            std::ptr::copy(
-                self.keys.as_ptr().add(pos),
-                self.keys.as_mut_ptr().add(pos + 1),
-                self.base.meta.count as usize - pos,
-            );
+            unsafe {
+                std::ptr::copy(
+                    self.keys.as_ptr().add(pos),
+                    self.keys.as_mut_ptr().add(pos + 1),
+                    self.base.meta.count as usize - pos,
+                );
 
-            std::ptr::copy(
-                self.children.as_ptr().add(pos),
-                self.children.as_mut_ptr().add(pos + 1),
-                self.base.meta.count as usize - pos,
-            );
-        }
+                std::ptr::copy(
+                    self.children.as_ptr().add(pos),
+                    self.children.as_mut_ptr().add(pos + 1),
+                    self.base.meta.count as usize - pos,
+                );
+            }
 
-        self.keys[pos] = key;
-        self.children[pos] = node;
-        self.base.meta.count += 1;
+            self.keys[pos] = key;
+            self.children[pos] = NodePtr::from_node::<K, V>(&node as *const BaseNode);
+            self.base.meta.count += 1;
     }
 
-    fn change(&mut self, key: u8, val: NodePtr) -> NodePtr {
-        for i in 0..self.base.meta.count {
-            // 二分查找
-            if self.keys[i as usize] == key {
-                let old = self.children[i as usize];
-                self.children[i as usize] = val;
-                return old;
-            }
-        }
-        unreachable!("The key should always exist in the node");
+    fn change<K: TreeKeyTrait, V>(&mut self, key: u8, val: NodeLeaf<K, V>) -> NodeLeaf<K, V> {
+        todo!()
     }
 
-    fn get_child(&self, key: u8) -> Option<NodeLeaf<K, V>> {
-        for i in 0..self.base.meta.count {
-            if self.keys[i as usize] == key {
-                let child = self.children[i as usize].clone();
-                return Some(child);
-            }
-        }
-        None
+    fn get_child<K: TreeKeyTrait, V>(&self, key: u8) -> Option<NodeLeaf<K, V>> {
+        todo!()
     }
+
+    //
+    // fn change(&mut self, key: u8, val: NodePtr) -> NodePtr {
+    //     for i in 0..self.base.meta.count {
+    //         // 二分查找
+    //         if self.keys[i as usize] == key {
+    //             let old = self.children[i as usize];
+    //             self.children[i as usize] = val;
+    //             return old;
+    //         }
+    //     }
+    //     unreachable!("The key should always exist in the node");
+    // }
+    //
+    // fn get_child(&self, key: u8) -> Option<NodeLeaf<K, V>> {
+    //     for i in 0..self.base.meta.count {
+    //         if self.keys[i as usize] == key {
+    //             let child = self.children[i as usize].clone();
+    //             return Some(child);
+    //         }
+    //     }
+    //     None
+    // }
 
     fn remove(&mut self, k: u8) {
         for i in 0..self.base.meta.count {
@@ -162,9 +171,9 @@ impl NodeTrait for Node4 {
 
 #[repr(C)]
 #[repr(align(8))]
-pub(crate) struct Node16<K:TreeKeyTrait, V> {
+pub(crate) struct Node16 {
     base: BaseNode,
-    children: [NodeLeaf<K,V>; 16],
+    children: [NodePtr; 16],
     keys: [u8; 16],
 }
 //
@@ -369,11 +378,11 @@ pub(crate) struct Node16<K:TreeKeyTrait, V> {
 //
 #[repr(C)]
 #[repr(align(8))]
-pub(crate) struct Node48<K,V> {
+pub(crate) struct Node48 {
     base: BaseNode,
     pub(crate) child_idx: [u8; 256],
     next_empty: u8,
-    children: [NodeLeaf<K,V>; 48],
+    children: [NodePtr; 48],
 }
 
 // pub(crate) const EMPTY_MARKER: u8 = 48;
@@ -472,10 +481,10 @@ pub(crate) struct Node48<K,V> {
 
 #[repr(C)]
 #[repr(align(8))]
-pub(crate) struct Node256<K: TreeKeyTrait, V> {
+pub(crate) struct Node256 {
     base: BaseNode,
     key_mask: [u8; 32],
-    children: [NodeLeaf<K,V>; 256],
+    children: [NodePtr; 256],
 }
 
 // impl Node256 {

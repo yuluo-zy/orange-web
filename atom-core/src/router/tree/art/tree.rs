@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crossbeam_epoch::Guard;
 use crate::router::tree::art::node::node::{Node256, Node4};
 use crate::router::tree::art::{ArtAllocator, TreeKeyTrait};
-// use crate::router::tree::art::guard::ReadGuard;
+use crate::router::tree::art::guard::ReadGuard;
 use crate::router::tree::art::node::{BaseNode, MAX_KEY_LEN, NodeTrait, Prefix};
 use crate::router::tree::art::utils::{Backoff, EMPTY_NODE_ERROR, TreeError};
 

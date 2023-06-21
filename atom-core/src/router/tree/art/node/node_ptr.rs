@@ -9,12 +9,12 @@ pub(crate) union NodePtr {
 
 impl NodePtr {
     #[inline]
-    pub(crate) fn from_node(ptr: *const BaseNode) -> Self {
+    pub(crate) fn from_sub(ptr: *const BaseNode) -> Self {
         Self { sub_node: ptr }
     }
 
     #[inline]
-    pub(crate) fn from_ptr<K: TreeKeyTrait, V>(ptr: *const BaseNode) -> Self {
+    pub(crate) fn from_node<K: TreeKeyTrait, V>(ptr: *const BaseNode) -> Self {
         Self {
             ptr
         }
