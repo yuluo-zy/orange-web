@@ -3,16 +3,18 @@ pub mod node;
 use std::{alloc, ptr};
 use std::alloc::{Allocator, Layout, LayoutError};
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use serde::de::StdError;
 use crate::error;
 use crate::error::Error;
 use crate::router::tree::art::ArtAllocator;
+use crate::router::tree::art::guard::ReadGuard;
 use crate::router::tree::art::node::node::{Node16, NODE16TYPE, NODE256TYPE, Node4, NODE48TYPE, NODE4TYPE};
+use crate::router::tree::art::utils::TreeError;
 
-const MAX_KEY_LEN: usize = 8;
+pub const MAX_KEY_LEN: usize = 8;
 
-type Prefix = [u8; MAX_KEY_LEN];
+pub type Prefix = [u8; MAX_KEY_LEN];
 
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
 pub enum NodeType {
@@ -21,7 +23,7 @@ pub enum NodeType {
     Node48 = 2,
     Node256 = 3,
 }
-
+/// 定长的 8 字节存储压缩的路径, 当超过这个大小时, 切换到乐观策略.
 pub struct NodeMeta {
     pub node_type: NodeType,
     // path compression时的前缀
@@ -141,11 +143,29 @@ impl BaseNode {
         self.meta.node_prefix[..self.meta.prefix_size as usize].as_ref()
     }
 
-    // pub(crate) unsafe fn drop_node<A: Allocator>(node: *mut BaseNode, allocator: A) {
-    //     let layout = (*node).get_type().node_layout();
-    //     let ptr = ptr::NonNull::new(node as *mut u8).unwrap();
-    //     allocator.deallocate(ptr, layout);
-    // }
+    pub(crate) unsafe fn drop_node<A: Allocator>(node: *mut BaseNode, allocator: A) {
+        let layout = (*node).get_type().node_layout();
+        let ptr = ptr::NonNull::new(node as *mut u8).unwrap();
+        allocator.deallocate(ptr, layout);
+    }
+
+    pub fn read_lock(&self) -> Result<ReadGuard, TreeError> {
+        let version_lock = self.type_version.load(Ordering::Acquire);
+
+        if Self::is_locked(version_lock) || Self::is_obsolete(version_lock) {
+           return Err(TreeError::Locked)
+        }
+
+        Ok(ReadGuard::new(version_lock, self))
+    }
+
+    pub fn is_locked(version: usize) -> bool {
+       ( version & 0b10) == 0b10
+    }
+
+    pub fn is_obsolete(version: usize) -> bool {
+        (version & 1) == 1
+    }
 
     // pub fn insert<K,V>(&self, value: (K,V), art_allocator: Arc<ArtAllocator>) -> Result<(), Error> {
     //     match self.get_type() {

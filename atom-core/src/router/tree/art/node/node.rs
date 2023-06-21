@@ -11,11 +11,17 @@ pub(crate) const NODE48TYPE: Result<Layout, LayoutError> = Layout::from_size_ali
 pub(crate) const NODE256TYPE: Result<Layout, LayoutError> = Layout::from_size_align(mem::size_of::<Node256>(),
                                                                                     mem::align_of::<Node256>(), );
 
+pub const SMALL_STRUCT: usize = 8;
+pub type Small = [u8; SMALL_STRUCT];
+
 #[cfg(all(target_feature = "sse2", not(miri)))]
 use core::arch::x86_64::{_mm_prefetch, _MM_HINT_T0};
 use std::arch::x86_64::{
     __m128i, _mm_cmplt_epi8, _mm_loadu_si128, _mm_movemask_epi8, _mm_set1_epi8,
 };
+use std::marker::PhantomData;
+use std::mem::MaybeUninit;
+use crate::router::tree::art::TreeKeyTrait;
 
 #[repr(C)]
 #[repr(align(64))] // 常见的缓存行大小为64字节
@@ -562,5 +568,83 @@ impl NodeTrait for Node256 {
 
     fn get_type() -> NodeType {
         NodeType::Node256
+    }
+}
+
+
+pub struct SmallStruct<T> {
+    storage: MaybeUninit<Small>,
+    marker: PhantomData<T>,
+}
+
+pub enum NodeLeaf<K, V> {
+    Empty,
+    LeafLarge(Box<(K,V)>),
+    LeafLargeKey(Box<K>, SmallStruct<V>),
+    LeafLargeValue(SmallStruct<K>, Box<V>),
+    LeafSmall(SmallStruct<K>, SmallStruct<V>),
+}
+
+
+impl<T> SmallStruct<T> {
+    pub fn new(elem: T) -> Self {
+        unsafe {
+            let mut ret = SmallStruct { storage: MaybeUninit::<Small>::uninit(), marker: PhantomData };
+            ret.storage.as_mut_ptr().write(elem);
+            ret
+        }
+    }
+
+    pub fn reference(&self) -> &T {
+        unsafe { &*(self.storage.assume_init().as_ptr() as *const T) }
+    }
+
+    pub fn own(self) -> T {
+        unsafe {
+            let mut ret = MaybeUninit::<Small>::uninit();
+            let dst = &mut ret as *mut T as *mut u8;
+            std::ptr::copy_nonoverlapping(self.storage.assume_init().as_ptr(), dst, mem::size_of::<T>());
+            ret
+        }
+    }
+}
+
+impl<K: TreeKeyTrait, V> NodeLeaf<K, V> {
+    #[inline]
+    pub fn key(&self) -> &K {
+        match self {
+            &NodeLeaf::LeafLarge(ref ptr) => &ptr.as_ref().0,
+            &NodeLeaf::LeafLargeKey(ref key_ptr, _) => &*key_ptr,
+            &NodeLeaf::LeafLargeValue(ref key_small, _) => key_small.reference(),
+            &NodeLeaf::LeafSmall(ref key_small, _) => key_small.reference(),
+            _ => {}
+        }
+    }
+
+    pub fn value(self) -> V {
+        match self {
+            NodeLeaf::LeafLarge(ptr) => (*ptr).1,
+            NodeLeaf::LeafLargeKey(_, value_small) => value_small.own(),
+            NodeLeaf::LeafLargeValue(_, value_ptr) => *value_ptr,
+            NodeLeaf::LeafSmall(_, value_small) => value_small.own(),
+            _ => panic!("Does not contain value"),
+        }
+    }
+
+    #[inline]
+    pub fn new_leaf(key: K, value: V) -> NodeLeaf<K,V> {
+        if mem::size_of::<K>() > SMALL_STRUCT {
+            if mem::size_of::<V>() > SMALL_STRUCT {
+                NodeLeaf::LeafLarge(Box::new((key,value)))
+            } else {
+                NodeLeaf::LeafLargeKey(Box::new(key), SmallStruct::new(value))
+            }
+        } else {
+            if mem::size_of::<V>() > SMALL_STRUCT {
+                NodeLeaf::LeafLargeValue(SmallStruct::new(key), Box::new(value))
+            } else {
+                NodeLeaf::LeafSmall(SmallStruct::new(key), SmallStruct::new(value))
+            }
+        }
     }
 }

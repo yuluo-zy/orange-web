@@ -8,6 +8,8 @@ pub(crate) struct Backoff {
     step: Cell<u32>,
 }
 
+pub const EMPTY_NODE_ERROR: &str = "parent_node is empty";
+
 impl Backoff {
     #[inline]
     pub(crate) fn new() -> Self {
@@ -66,4 +68,11 @@ impl Default for Backoff {
     fn default() -> Backoff {
         Backoff::new()
     }
+}
+
+#[derive(Debug)]
+pub enum TreeError {
+    VersionNotMatch,
+    Locked,
+    Oom,
 }
