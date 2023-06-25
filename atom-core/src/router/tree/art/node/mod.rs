@@ -1,5 +1,5 @@
 pub mod node;
-pub mod node_ptr;
+mod leaf;
 
 use std::{alloc, mem, ptr};
 use std::alloc::{Allocator, Layout, LayoutError};
@@ -9,8 +9,6 @@ use serde::de::StdError;
 use crate::error;
 use crate::error::Error;
 use crate::router::tree::art::{ArtAllocator, TreeKeyTrait};
-// use crate::router::tree::art::guard::ReadGuard;
-use crate::router::tree::art::node::node::{Node16, NODE16TYPE, Node256, NODE256TYPE, Node4, Node48, NODE48TYPE, NODE4TYPE, NodeLeaf};
 use crate::router::tree::art::utils::TreeError;
 
 pub const MAX_KEY_LEN: usize = 8;
@@ -37,16 +35,16 @@ pub struct NodeMeta {
 }
 
 
-impl NodeType {
-    pub(crate) fn get_layout<K: TreeKeyTrait, V>(&self) -> Result<Layout, LayoutError> {
-        match *self {
-            NodeType::Node4 => { NODE4TYPE }
-            NodeType::Node16 => { NODE16TYPE }
-            NodeType::Node48 => { NODE48TYPE }
-            NodeType::Node256 => { NODE256TYPE }
-        }
-    }
-}
+// impl NodeType {
+//     pub(crate) fn get_layout<K: TreeKeyTrait, V>(&self) -> Result<Layout, LayoutError> {
+//         match *self {
+//             NodeType::Node4 => { NODE4TYPE }
+//             NodeType::Node16 => { NODE16TYPE }
+//             NodeType::Node48 => { NODE48TYPE }
+//             NodeType::Node256 => { NODE256TYPE }
+//         }
+//     }
+// }
 
 pub struct BaseNode {
     // 版本内容， 用来实现乐观锁
@@ -55,106 +53,108 @@ pub struct BaseNode {
     pub meta: NodeMeta,
 }
 
-pub trait NodeTrait {
-    fn base(&self) -> &BaseNode;
-    fn base_mut(&mut self) -> &mut BaseNode;
-    fn is_full(&self) -> bool;
-    fn insert<K: TreeKeyTrait, V>(&mut self, key: u8, node: NodeLeaf<K, V>);
-    fn change<K: TreeKeyTrait, V>(&mut self, key: u8, val: NodeLeaf<K, V>) -> NodeLeaf<K, V>;
-    fn get_child<K: TreeKeyTrait, V>(&self, key: u8) -> Option<NodeLeaf<K, V>>;
-    fn remove(&mut self, k: u8);
-    fn copy_to<N: NodeTrait>(&self, dst: &mut N);
-    fn get_type() -> NodeType;
-}
+// pub trait NodeTrait {
+//     type Key;
+//     type Value;
+//     fn get_type() -> NodeType;
+//     fn base(&self) -> &BaseNode;
+//     fn base_mut(&mut self) -> &mut BaseNode;
+//     fn is_full(&self) -> bool;
+//     fn insert(&mut self, key: u8, node: NodeLeaf<Self::Key, Self::Value>);
+//     fn change(&mut self, key: u8, val: NodeLeaf<Self::Key, Self::Value>) -> Option<NodeLeaf<Self::Key, Self::Value>>;
+//     fn get_child(&self, key: u8) -> Option<&NodeLeaf<Self::Key, Self::Value>>;
+//     fn remove(&mut self, k: u8);
+//     // fn copy_to<N: NodeTrait>(&self, dst: &mut N);
+// }
 
-impl BaseNode {
-    //
-    pub fn make_node<K: TreeKeyTrait, V, N: NodeTrait<K, V>>(prefix: &[u8], art_allocator: Arc<ArtAllocator>) -> Result<*mut N, Error> {
-        let layout = N::get_type().get_layout()?;
-        let ptr = art_allocator.allocate(layout).map_err(|e| Error::new(e.to_string()))?;
-        let node_ptr = ptr.as_non_null_ptr().as_ptr() as *mut BaseNode;
-        let node = BaseNode::new(N::get_type(), prefix);
-        unsafe {
-            ptr::write(node_ptr, node);
-            Ok(node_ptr as *mut N)
-        }
-    }
-
-    pub fn new(node_type: NodeType, prefix: &[u8]) -> Self {
-        let mut prefix_temp: [u8; MAX_KEY_LEN] = [0; MAX_KEY_LEN];
-
-        // 创建前缀
-        for (index, value) in prefix.iter().enumerate() {
-            prefix_temp[index] = *value;
-            if index >= MAX_KEY_LEN - 1 {
-                break;
-            }
-        }
-
-        let meta = NodeMeta {
-            node_type,
-            node_prefix: prefix_temp,
-            count: 0,
-            prefix_size: prefix_temp.len() as u16,
-        };
-
-        BaseNode { type_version: AtomicUsize::new(0), meta }
-    }
-
-    pub fn get_type(&self) -> NodeType {
-        return self.meta.node_type;
-    }
-
-    pub fn get_count(&self) -> usize {
-        return self.meta.count as usize;
-    }
-
-    pub fn prefix(&self) -> &[u8] {
-        self.meta.node_prefix[..self.meta.prefix_size as usize].as_ref()
-    }
-
-    pub(crate) unsafe fn drop_node<A: Allocator>(node: *mut BaseNode, allocator: A) {
-        let layout = (*node).get_type().node_layout();
-        let ptr = ptr::NonNull::new(node as *mut u8).unwrap();
-        allocator.deallocate(ptr, layout);
-    }
-
-    // pub fn read_lock(&self) -> Result<ReadGuard, TreeError> {
-    //     let version_lock = self.type_version.load(Ordering::Acquire);
-    //
-    //     if Self::is_locked(version_lock) || Self::is_obsolete(version_lock) {
-    //         return Err(TreeError::Locked);
-    //     }
-    //
-    //     Ok(ReadGuard::new(version_lock, self))
-    // }
-
-    pub fn is_locked(version: usize) -> bool {
-        (version & 0b10) == 0b10
-    }
-
-    pub fn is_obsolete(version: usize) -> bool {
-        (version & 1) == 1
-    }
-
-    // pub fn insert<K,V>(&self, value: (K,V), art_allocator: Arc<ArtAllocator>) -> Result<(), Error> {
-    //     match self.get_type() {
-    //         NodeType::Node4 => self.insert_inner<Node4, Node16>(value, art_allocator),
-    //
-    //         NodeType::Node16 =>  self.insert_inner<Node4, Node16>(value, art_allocator),
-    //         NodeType::Node48 =>self.insert_inner<Node4, Node16>(value, art_allocator),
-    //         NodeType::Node256 => self.insert_inner<Node4, Node16>(value, art_allocator),
-    //     }
-    //     Ok(())
-    // }
-    //
-    // pub fn insert_inner<CurT: NodeTrait, BiggerT: NodeTrait> (
-    //     &self,
-    //     value: (K,V),
-    //     art_allocator: Arc<ArtAllocator>
-    // ) -> Result<(), Error> {
-    //
-    // }
-}
+// impl BaseNode {
+//     //
+//     pub fn make_node<K: TreeKeyTrait, V, N: NodeTrait>(prefix: &[u8], art_allocator: Arc<ArtAllocator>) -> Result<*mut N, Error> {
+//         let layout = N::get_type().get_layout()?;
+//         let ptr = art_allocator.allocate(layout).map_err(|e| Error::new(e.to_string()))?;
+//         let node_ptr = ptr.as_non_null_ptr().as_ptr() as *mut BaseNode;
+//         let node = BaseNode::new(N::get_type(), prefix);
+//         unsafe {
+//             ptr::write(node_ptr, node);
+//             Ok(node_ptr as *mut N)
+//         }
+//     }
+//
+//     pub fn new(node_type: NodeType, prefix: &[u8]) -> Self {
+//         let mut prefix_temp: [u8; MAX_KEY_LEN] = [0; MAX_KEY_LEN];
+//
+//         // 创建前缀
+//         for (index, value) in prefix.iter().enumerate() {
+//             prefix_temp[index] = *value;
+//             if index >= MAX_KEY_LEN - 1 {
+//                 break;
+//             }
+//         }
+//
+//         let meta = NodeMeta {
+//             node_type,
+//             node_prefix: prefix_temp,
+//             count: 0,
+//             prefix_size: prefix_temp.len() as u16,
+//         };
+//
+//         BaseNode { type_version: AtomicUsize::new(0), meta }
+//     }
+//
+//     pub fn get_type(&self) -> NodeType {
+//         return self.meta.node_type;
+//     }
+//
+//     pub fn get_count(&self) -> usize {
+//         return self.meta.count as usize;
+//     }
+//
+//     pub fn prefix(&self) -> &[u8] {
+//         self.meta.node_prefix[..self.meta.prefix_size as usize].as_ref()
+//     }
+//
+//     pub(crate) unsafe fn drop_node<A: Allocator>(node: *mut BaseNode, allocator: A) {
+//         let layout = (*node).get_type().node_layout();
+//         let ptr = ptr::NonNull::new(node as *mut u8).unwrap();
+//         allocator.deallocate(ptr, layout);
+//     }
+//
+//     // pub fn read_lock(&self) -> Result<ReadGuard, TreeError> {
+//     //     let version_lock = self.type_version.load(Ordering::Acquire);
+//     //
+//     //     if Self::is_locked(version_lock) || Self::is_obsolete(version_lock) {
+//     //         return Err(TreeError::Locked);
+//     //     }
+//     //
+//     //     Ok(ReadGuard::new(version_lock, self))
+//     // }
+//
+//     pub fn is_locked(version: usize) -> bool {
+//         (version & 0b10) == 0b10
+//     }
+//
+//     pub fn is_obsolete(version: usize) -> bool {
+//         (version & 1) == 1
+//     }
+//
+//     // pub fn insert<K,V>(&self, value: (K,V), art_allocator: Arc<ArtAllocator>) -> Result<(), Error> {
+//     //     match self.get_type() {
+//     //         NodeType::Node4 => self.insert_inner<Node4, Node16>(value, art_allocator),
+//     //
+//     //         NodeType::Node16 =>  self.insert_inner<Node4, Node16>(value, art_allocator),
+//     //         NodeType::Node48 =>self.insert_inner<Node4, Node16>(value, art_allocator),
+//     //         NodeType::Node256 => self.insert_inner<Node4, Node16>(value, art_allocator),
+//     //     }
+//     //     Ok(())
+//     // }
+//     //
+//     // pub fn insert_inner<CurT: NodeTrait, BiggerT: NodeTrait> (
+//     //     &self,
+//     //     value: (K,V),
+//     //     art_allocator: Arc<ArtAllocator>
+//     // ) -> Result<(), Error> {
+//     //
+//     // }
+// }
 
 

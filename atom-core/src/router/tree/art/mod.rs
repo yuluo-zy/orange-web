@@ -2,7 +2,7 @@ use std::alloc::{Allocator, AllocError, Layout};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use crate::router::tree::art::tree::RawTree;
+// use crate::router::tree::art::tree::RawTree;
 
 mod tree;
 pub mod node;
@@ -53,7 +53,7 @@ impl TreeKeyTrait for String {
     }
 }
 pub(crate) struct ArtTree<K,V> where K: TreeKeyTrait {
-    inner: RawTree<K,V>,
+    // inner: RawTree<K,V>,
     pr_key: PhantomData<K>,
     pr_value: PhantomData<V>
 }
