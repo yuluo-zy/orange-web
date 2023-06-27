@@ -1,4 +1,4 @@
-use crate::router::tree::art::node::{BaseNode, NodeTrait};
+use crate::router::tree::art::node::{ NodeTrait};
 use crate::router::tree::art::node::bit_array::BitArray;
 use crate::router::tree::art::node::bit_set::BitsetTrait;
 use crate::router::tree::art::utils::u8_keys_find_key_position;
@@ -31,7 +31,7 @@ impl<N, const WIDTH: usize, Bitset> KeyedNode<N, WIDTH, Bitset>
     #[inline]
     pub fn new() -> Self {
         Self {
-            // base: BaseNode {},
+            // base: BaseNode::new(),
             keys: [255; WIDTH],
             children: Default::default(),
             num_children: 0,
