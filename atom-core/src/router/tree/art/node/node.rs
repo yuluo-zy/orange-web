@@ -70,8 +70,6 @@ impl<N, const WIDTH: usize, Bitset> KeyedNode<N, WIDTH, Bitset>
         assert!(WIDTH < OLD_WIDTH);
         let mut new = KeyedNode::new();
         let mut cnt = 0;
-
-        assert!(km.children.size() < WIDTH);
         // Since we're smaller, we compact empty spots out.
         for i in 0..OLD_WIDTH {
             if km.children.check(i) {
@@ -118,7 +116,6 @@ for KeyedNode<N, WIDTH, Bitset>
                 self.children.bitset.bit_width()
             )
         });
-        println!("{:?}, {:?}", idx, WIDTH);
         assert!(idx < WIDTH);
         self.keys[idx] = key;
         self.children.set(idx, node);
@@ -160,8 +157,8 @@ for KeyedNode<N, WIDTH, Bitset>
     }
 
     #[inline]
-    fn width(&self) -> u16 {
-        WIDTH as u16
+    fn width(&self) -> usize {
+        WIDTH
     }
 }
 

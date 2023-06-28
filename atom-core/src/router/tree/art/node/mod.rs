@@ -40,7 +40,7 @@ pub trait NodeTrait<N> {
     fn find_child_mut(&mut self, key: u8) -> Option<&mut N>;
     fn delete_child(&mut self, key: u8) -> Option<N>;
     fn num_children(&self) -> usize;
-    fn width(&self) -> u16;
+    fn width(&self) -> usize;
 }
 
 pub(crate) enum TreeNode<P: Partial + Clone, V> {
@@ -63,7 +63,6 @@ pub enum NodeType {
 pub(crate) struct Node<P: Partial + Clone, V> {
     pub(crate) prefix: P,
     pub(crate) type_version_lock_obsolete: AtomicUsize,
-    pub(crate) count: u16,
     pub(crate) tree_node: TreeNode<P, V>,
     value: PhantomData<V>,
 }
@@ -82,7 +81,6 @@ impl<P: Partial + Clone, V> Node<P, V> {
         Self {
             prefix,
             type_version_lock_obsolete: AtomicUsize::new(0),
-            count: 0,
             tree_node: node,
             value: PhantomData,
         }
@@ -94,7 +92,6 @@ impl<P: Partial + Clone, V> Node<P, V> {
         Self {
             prefix,
             type_version_lock_obsolete: AtomicUsize::new(0),
-            count: 0,
             tree_node: node,
             value: PhantomData,
         }
@@ -119,10 +116,6 @@ impl<P: Partial + Clone, V> Node<P, V> {
 
     fn is_locked(version: usize) -> bool {
         (version & 0b10) == 0b10
-    }
-
-    pub(crate) fn get_count(&self) -> usize {
-        self.count as usize
     }
 
     fn is_obsolete(version: usize) -> bool {
@@ -177,13 +170,27 @@ impl<P: Partial + Clone, V> Node<P, V> {
                 n4.delete_child(key)
             }
             TreeNode::Node16(n16) => {
-                n16.delete_child(key)
+                let node = n16.delete_child(key);
+                if self.num_children() < 5 {
+                    self.shrink();
+                }
+                node
             }
             TreeNode::Node48(n48) => {
-                n48.delete_child(key)
+                let node = n48.delete_child(key);
+                if self.num_children() < 17 {
+                    self.shrink();
+                }
+
+                // Return what we deleted.
+                node
             }
             TreeNode::Node256(n256) => {
-                n256.delete_child(key)
+                let node = n256.delete_child(key);
+                if self.num_children() < 49 {
+                    self.shrink();
+                }
+                node
             }
             _ => { None }
         }
@@ -216,13 +223,14 @@ impl<P: Partial + Clone, V> Node<P, V> {
     #[inline]
     fn is_full(&self) -> bool {
         match &self.tree_node {
-            TreeNode::Node4(km) => self.count >= km.width(),
-            TreeNode::Node16(km) => self.count >= km.width(),
-            TreeNode::Node48(im) => self.count >= im.width(),
+            TreeNode::Node4(km) => self.num_children() >= km.width(),
+            TreeNode::Node16(km) => self.num_children() >= km.width(),
+            TreeNode::Node48(im) => self.num_children() >= im.width(),
             // Should not be possible.
-            TreeNode::Node256(_) => self.count >= 256,
+            TreeNode::Node256(_) => self.num_children() >= 256,
             TreeNode::Leaf(_) => unreachable!("Should not be possible."),
         }
+
     }
 
     fn shrink(&mut self) {

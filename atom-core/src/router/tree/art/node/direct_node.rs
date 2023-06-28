@@ -73,7 +73,7 @@ impl<N> NodeTrait<N> for DirectNode<N> {
     }
 
     #[inline]
-    fn width(&self) -> u16 {
+    fn width(&self) -> usize {
         256
     }
 }

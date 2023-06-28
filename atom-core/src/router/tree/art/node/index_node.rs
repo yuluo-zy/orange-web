@@ -118,8 +118,8 @@ for IndexNode<N, WIDTH, Bitset>
     }
 
     #[inline]
-    fn width(&self) -> u16 {
-        WIDTH as u16
+    fn width(&self) -> usize {
+        WIDTH
     }
 }
 
