@@ -1,252 +1,559 @@
-// use std::marker::PhantomData;
-// use std::sync::Arc;
-// use crossbeam_epoch::Guard;
-// // use crate::router::tree::art::node::node::{Node256, Node4};
-// use crate::router::tree::art::{ArtAllocator, TreeKeyTrait};
-// use crate::router::tree::art::guard::ReadGuard;
-// use crate::router::tree::art::node::{BaseNode, MAX_KEY_LEN, NodeTrait, Prefix};
-// use crate::router::tree::art::utils::{Backoff, EMPTY_NODE_ERROR, TreeError};
-//
-// // pub(crate) struct RawTree<K: TreeKeyTrait, V> {
-// //     pub(crate) root: *const Node256<K, V>,
-// //     allocator: Arc<ArtAllocator>,
-// //     _pt_key: PhantomData<K>,
-// //     _pt_value: PhantomData<V>,
-// // }
-//
-// // unsafe impl<K: TreeKeyTrait, V> Send for RawTree<K, V> {}
-// //
-// // unsafe impl<K: TreeKeyTrait, V> Sync for RawTree<K, V> {}
-// //
-// // impl<K: TreeKeyTrait, V> Default for RawTree<K, V> {
-// //     fn default() -> Self {
-// //         todo!()
-// //     }
-// // }
-// //
-// // impl<K: TreeKeyTrait, V> Drop for RawTree<K, V> {
-// //     fn drop(&mut self) {
-// //         todo!()
-// //     }
-// // }
-//
-// // impl<K: TreeKeyTrait, V> RawTree<K, V> {
-// //     pub fn new(allocator: Arc<ArtAllocator>) -> Self {
-// //         RawTree {
-// //             root: BaseNode::make_node::<Node256>(&[], allocator.clone())
-// //                 .expect("Can't allocate memory for root node!") as *const Node256,
-// //             allocator,
-// //             _pt_key: PhantomData,
-// //             _pt_value: PhantomData,
-// //         }
-// //     }
-// //
-// //     #[inline]
-// //     fn insert_inner<F>(
-// //         &self,
-// //         k: &K,
-// //         v_func: &mut F,
-// //         guard: &Guard
-// //     ) -> Result<Option<usize>, TreeError>
-// //         where
-// //             F: FnMut(V) -> usize,
-// //     {
-// //         let mut parent_node: Option<ReadGuard> = None;
-// //         let mut next_node = self.root as *const BaseNode;
-// //         let mut parent_key: u8;
-// //         let mut node_key: u8 = 0;
-// //         let mut level = 0;
-// //
-// //         let mut node;
-// //
-// //         loop {
-// //             // todo 优化细粒度
-// //             parent_key = node_key;
-// //             node = unsafe { &*next_node }.read_lock()?;
-// //
-// //             let mut next_level = level;
-// //             let res = self.check_prefix_not_match(node.as_ref(), k, &mut next_level);
-// //             match res {
-// //                 None => {
-// //                     level = next_level;
-// //                     node_key = k.as_bytes()[level as usize];
-// //
-// //                     let next_node_tmp = node.as_ref().get_child(node_key);
-// //
-// //                     node.check_version()?;
-// //
-// //                     let next_node_tmp = if let Some(n) = next_node_tmp {
-// //                         n
-// //                     } else {
-// //                         let new_leaf = {
-// //                             if level == (MAX_KEY_LEN - 1) as u32 {
-// //                                 // last key, just insert the tid
-// //                                 NodePtr::from_tid(tid_func(None))
-// //                             } else {
-// //                                 let new_prefix = k.as_bytes();
-// //                                 let n4 = BaseNode::make_node::<Node4>(
-// //                                     &new_prefix[..k.len() - 1],
-// //                                     &self.allocator,
-// //                                 )?;
-// //                                 unsafe { &mut *n4 }.insert(
-// //                                     k.as_bytes()[k.len() - 1],
-// //                                     NodePtr::from_tid(tid_func(None)),
-// //                                 );
-// //                                 NodePtr::from_node(n4 as *mut BaseNode)
-// //                             }
-// //                         };
-// //
-// //                         if let Err(e) = BaseNode::insert_and_unlock(
-// //                             node,
-// //                             (parent_key, parent_node),
-// //                             (node_key, new_leaf),
-// //                             &self.allocator,
-// //                             guard,
-// //                         ) {
-// //                             if level != (MAX_KEY_LEN - 1) as u32 {
-// //                                 unsafe {
-// //                                     BaseNode::drop_node(
-// //                                         new_leaf.as_ptr() as *mut BaseNode,
-// //                                         self.allocator.clone(),
-// //                                     );
-// //                                 }
-// //                             }
-// //                             return Err(e);
-// //                         }
-// //
-// //                         return Ok(None);
-// //                     };
-// //
-// //                     if let Some(p) = parent_node {
-// //                         p.unlock()?;
-// //                     }
-// //
-// //                     if level == (MAX_KEY_LEN - 1) as u32 {
-// //                         // At this point, the level must point to the last u8 of the key,
-// //                         // meaning that we are updating an existing value.
-// //
-// //                         let old = node.as_ref().get_child(node_key).unwrap().as_tid();
-// //                         let new = tid_func(Some(old));
-// //                         if old == new {
-// //                             node.check_version()?;
-// //                             return Ok(Some(old));
-// //                         }
-// //
-// //                         let mut write_n = node.upgrade().map_err(|(_n, v)| v)?;
-// //
-// //                         let old = write_n.as_mut().change(node_key, NodePtr::from_tid(new));
-// //                         return Ok(Some(old.as_tid()));
-// //                     }
-// //                     next_node = next_node_tmp.as_ptr();
-// //                     level += 1;
-// //                 }
-// //
-// //                 Some(no_match_key) => {
-// //                     let mut write_p = parent_node.expect(EMPTY_NODE_ERROR).upgrade().map_err(|(_n, v)| v)?;
-// //                     let mut write_n = node.upgrade().map_err(|(_n, v)| v)?;
-// //
-// //                     // 1) Create new node which will be parent of node, Set common prefix, level to this node
-// //                     // let prefix_len = write_n.as_ref().prefix().len();
-// //                     let new_middle_node = BaseNode::make_node::<Node4>(
-// //                         write_n.as_ref().prefix()[0..next_level as usize].as_ref(),
-// //                         self.allocator.clone(),
-// //                     )?;
-// //
-// //                     // 2)  add node and (tid, *k) as children
-// //                     if next_level == (MAX_KEY_LEN - 1) as u32 {
-// //                         // this is the last key, just insert to node
-// //                         unsafe { &mut *new_middle_node }.insert(
-// //                             k.as_bytes()[next_level as usize],
-// //                             NodePtr::from_tid(v_func(None)),
-// //                         );
-// //                     } else {
-// //                         // otherwise create a new node
-// //                         let single_new_node = BaseNode::make_node::<Node4>(
-// //                             &k.as_bytes()[..k.len() - 1],
-// //                             &self.allocator,
-// //                         )?;
-// //
-// //                         unsafe { &mut *single_new_node }
-// //                             .insert(k.as_bytes()[k.len() - 1], NodePtr::from_tid(tid_func(None)));
-// //                         unsafe { &mut *new_middle_node }.insert(
-// //                             k.as_bytes()[next_level as usize],
-// //                             NodePtr::from_node(single_new_node as *const BaseNode),
-// //                         );
-// //                     }
-// //
-// //                     unsafe { &mut *new_middle_node }
-// //                         .insert(no_match_key, NodePtr::from_node(write_n.as_mut()));
-// //
-// //                     // 3) update parentNode to point to the new node, unlock
-// //                     write_p.as_mut().change(
-// //                         parent_key,
-// //                         NodePtr::from_node(new_middle_node as *mut BaseNode),
-// //                     );
-// //
-// //                     return Ok(None);
-// //                 }
-// //             }
-// //             parent_node = Some(node);
-// //         }
-// //     }
-// //
-// //     #[inline]
-// //     pub(crate) fn insert(
-// //         &self,
-// //         k: K,
-// //         v: V,
-// //         guard: &Guard
-// //     ) -> Result<Option<usize>, TreeError> {
-// //         let backoff = Backoff::new();
-// //         loop {
-// //             match self.insert_inner(&k, &mut |_| v, guard) {
-// //                 Ok(v) => return Ok(v),
-// //                 Err(e) => match e {
-// //                     TreeError::Locked | TreeError::VersionNotMatch => {
-// //                         backoff.spin();
-// //                         continue;
-// //                     }
-// //                     TreeError::Oom => return Err(TreeError::Oom),
-// //                 },
-// //             }
-// //         }
-// //     }
-// //
-// //     #[inline]
-// //     fn check_prefix_not_match(&self, n: &BaseNode, key: &K, level: &mut u32) -> Option<u8> {
-// //         let n_prefix = n.prefix();
-// //         // 检查给定的 BaseNode 的前缀是否与 key 的指定部分匹配
-// //         if !n_prefix.is_empty() && *level < n_prefix.len() as u32 { // todo: level 与 prefix 长度
-// //             let p_iter = n_prefix.iter().skip(*level as usize);
-// //             for (i, v) in p_iter.enumerate() {
-// //                 if *v != key.as_bytes()[*level as usize] {
-// //                     let no_matching_key = *v;
-// //
-// //                     let mut prefix = Prefix::default();
-// //                     for (j, v) in prefix.iter_mut().enumerate().take(n_prefix.len() - i - 1) {
-// //                         *v = n_prefix[j + 1 + i];
-// //                     }
-// //                     return Some(no_matching_key);
-// //                 }
-// //                 *level += 1;
-// //             }
-// //         }
-// //
-// //         None
-// //     }
-// //
-// //     #[inline]
-// //     fn check_prefix(node: &BaseNode, key: &K, mut level: u32) -> Option<u32> {
-// //         let n_prefix = node.prefix();
-// //         let k_prefix = key.as_bytes();
-// //         let k_iter = k_prefix.iter().skip(level as usize);
-// //
-// //         for (n, k) in n_prefix.iter().skip(level as usize).zip(k_iter) {
-// //             if n != k {
-// //                 return None;
-// //             }
-// //             level += 1;
-// //         }
-// //         Some(level)
-// //     }
-// // }
+use std::cmp::min;
+use std::fmt::Debug;
+use std::marker::PhantomData;
+use std::ops::Deref;
+use std::sync::Arc;
+use crossbeam_epoch::Guard;
+use crate::router::tree::art::node::keys::KeyTrait;
+use crate::router::tree::art::node::{Node, NodeType, TreeNode};
+use crate::router::tree::art::node::partials::Partial;
+use crate::router::tree::art::utils::TreeError;
+
+pub trait PrefixTraits: Partial + Clone + PartialEq + Debug + for<'a> From<&'a [u8]> {}
+
+impl<T: Partial + Clone + PartialEq + Debug + for<'a> From<&'a [u8]>> PrefixTraits for T {}
+
+pub(crate) struct RawTree<P: PrefixTraits, V> {
+    pub(crate) root: Option<Node<P, V>>,
+}
+
+unsafe impl<P: PrefixTraits, V> Send for RawTree<P, V> {}
+
+unsafe impl<P: PrefixTraits, V> Sync for RawTree<P, V> {}
+
+impl<P: PrefixTraits, V> Default for RawTree<P, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// impl<P: PrefixTraits, V> Drop for RawTree<P, V> {
+//     fn drop(&mut self) {
+//         todo!()
+//     }
+// }
+
+impl<P: PrefixTraits, V> RawTree<P, V> {
+    pub fn new() -> Self {
+        RawTree { root: None }
+    }
+
+    pub fn get<K: KeyTrait<P>>(&self, key: &K) -> Option<&V> {
+        RawTree::get_iterate(self.root.as_ref()?, key)
+    }
+
+    fn get_iterate<'a, K: KeyTrait<P>>(cur_node: &'a Node<P, V>, key: &K) -> Option<&'a V> {
+        let mut cur_node = cur_node;
+        let mut depth = 0;
+        loop {
+            let prefix_common_match = cur_node.prefix.prefix_length_key(key, depth);
+            if prefix_common_match != cur_node.prefix.len() {
+                return None;
+            }
+
+            if cur_node.prefix.len() == (key.length_at(depth)) {
+                assert!(cur_node.node_type() == NodeType::Leaf);
+                return cur_node.value();
+            }
+
+            assert!(cur_node.get_count() > 0);
+
+            let k = key.at(depth + cur_node.prefix.len());
+            depth += cur_node.prefix.len();
+            cur_node = match cur_node.find_child(k) {
+                None => return None,
+                Some(c) => c,
+            }
+        }
+    }
+
+    pub fn get_mut<K: KeyTrait<P>>(&mut self, key: &K) -> Option<&mut V>
+
+    {
+        RawTree::get_iterate_mut(self.root.as_mut()?, key)
+    }
+    fn get_iterate_mut<'a, K: KeyTrait<P>>(cur_node: &'a mut Node<P, V>, key: &K) -> Option<&'a mut V>
+    {
+        let mut cur_node = cur_node;
+        let mut depth = 0;
+        loop {
+            let prefix_common_match = cur_node.prefix.prefix_length_key(key, depth);
+            if prefix_common_match != cur_node.prefix.len() {
+                return None;
+            }
+
+            if cur_node.prefix.len() == key.length_at(depth) {
+                return cur_node.value_mut();
+            }
+
+            let k = key.at(depth + cur_node.prefix.len());
+            depth += cur_node.prefix.len();
+            cur_node = cur_node.find_child_mut(k)?;
+        }
+    }
+
+    pub fn insert<K: KeyTrait<P>>(&mut self, key: &K, value: V) -> Option<V> {
+        if self.root.is_none() {
+            self.root = Some(Node::new_leaf(key.to_prefix(0), value));
+            return None;
+        };
+
+        let root = self.root.as_mut().unwrap();
+
+        RawTree::insert_recurse(root, key, value, 0)
+    }
+
+    fn insert_recurse<K: KeyTrait<P>>(
+        cur_node: &mut Node<P, V>,
+        key: &K,
+        value: V,
+        depth: usize,
+    ) -> Option<V>
+    {
+        let cur_node_prefix = cur_node.prefix.clone();
+
+        let longest_common_prefix = cur_node_prefix.prefix_length_key(key, depth);
+
+        let is_prefix_match =
+            min(cur_node_prefix.len(), key.length_at(depth)) == longest_common_prefix;
+
+        // Prefix fully covers this node.
+        // Either sets the value or replaces the old value already here.
+        if is_prefix_match && cur_node_prefix.len() == key.length_at(depth) {
+            if let TreeNode::Leaf(ref mut v) = &mut cur_node.tree_node {
+                return Some(std::mem::replace(v.value_mut()?, value));
+            } else {
+                panic!("Node type mismatch")
+            }
+        }
+
+        // Prefix is part of the current node, but doesn't fully cover it.
+        // We have to break this node up, creating a new parent node, and a sibling for our leaf.
+        if !is_prefix_match {
+            cur_node.prefix = cur_node_prefix.partial_after(longest_common_prefix);
+
+            // We will replace this leaf node with a new inner node. The new value will join the
+            // current node as sibling, both a child of the new node.
+            let n4 = Node::new(NodeType::Node4,cur_node_prefix.partial_before(longest_common_prefix));
+
+            let k1 = cur_node_prefix.at(longest_common_prefix);
+            let k2 = key.at(depth + longest_common_prefix);
+
+            let replacement_current = std::mem::replace(cur_node, n4);
+
+            // We've deferred creating the leaf til now so that we can take ownership over the
+            // key after other things are done peering at it.
+            let new_leaf = Node::new_leaf(key.to_prefix(depth + longest_common_prefix), value);
+
+            // Add the old leaf node as a child of the new inner node.
+            cur_node.count += 2;
+            cur_node.add_child(k1, replacement_current);
+            cur_node.add_child(k2, new_leaf);
+
+            return None;
+        }
+
+        // We must be an inner node, and either we need a new baby, or one of our children does, so
+        // we'll hunt and see.
+        let k = key.at(depth + longest_common_prefix);
+
+        let child_for_key = cur_node.find_child_mut(k);
+        if let Some(child) = child_for_key {
+            return RawTree::insert_recurse(
+                child,
+                key,
+                value,
+                depth + longest_common_prefix,
+            );
+        };
+
+        // We should not be a leaf at this point. If so, something bad has happened.
+        assert!(cur_node.node_type() != NodeType::Leaf );
+        let new_leaf = Node::new_leaf(key.to_prefix(depth + longest_common_prefix), value);
+        cur_node.count += 1;
+        cur_node.add_child(k, new_leaf);
+        None
+    }
+
+
+    pub fn remove<K: KeyTrait<P>>(&mut self, key: &K) -> Option<V> {
+        let Some(root) = self.root.as_mut() else {
+            return None;
+        };
+
+        let prefix_common_match = root.prefix.prefix_length_key(key, 0);
+        if prefix_common_match != root.prefix.len() {
+            return None;
+        }
+
+        if root.node_type() == NodeType::Leaf {
+            let mut stolen = self.root.take().expect("Node Leaf is null");
+            let leaf = match stolen.tree_node {
+                TreeNode::Leaf(node) => node.value,
+                _ => unreachable!(),
+            };
+            return leaf;
+        }
+
+        let result = RawTree::remove_recurse(root, key, prefix_common_match);
+        if root.node_type() != NodeType::Leaf && root.num_children() == 0 {
+            self.root = None;
+        }
+        result
+    }
+
+    fn remove_recurse<K: KeyTrait<P>>(
+        parent_node: &mut Node<P, V>,
+        key: &K,
+        depth: usize,
+    ) -> Option<V> {
+        // Seek the child that matches the key at this depth, which is the first character at the
+        // depth we're at.
+        let c = key.at(depth);
+        let child_node = parent_node.find_child_mut(c)?;
+
+        let prefix_common_match = child_node.prefix.prefix_length_key(key, depth);
+        if prefix_common_match != child_node.prefix.len() {
+            return None;
+        }
+
+        // If the child is a leaf, and the prefix matches the key, we can remove it from this parent
+        // node. If the prefix does not match, then we have nothing to do here.
+        if child_node.node_type() == NodeType::Leaf {
+            if child_node.prefix.len() != (key.length_at(depth)) {
+                return None;
+            }
+            let node = parent_node.delete_child(c).expect("child not found");
+            parent_node.count -= 1;
+            let v = match node.tree_node {
+                TreeNode::Leaf(v) => v.value,
+                _ => unreachable!(),
+            };
+            return v;
+        }
+
+        // Otherwise, recurse down the branch in that direction.
+        let result =
+            RawTree::remove_recurse(child_node, key, depth + child_node.prefix.len());
+
+        if result.is_some() && child_node.node_type() != NodeType::Leaf && child_node.num_children() == 0 {
+            let prefix = child_node.prefix.clone();
+            parent_node.count -= 1;
+            let deleted = parent_node
+                .delete_child(c)
+                .expect("expected empty inner node to be deleted");
+            assert_eq!(prefix.to_slice(), deleted.prefix.to_slice());
+        }
+
+        // TODO: 如果内部节点只有一个（叶子）子节点，则将其转换为叶子.
+
+        result
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{btree_map, BTreeMap, BTreeSet};
+    use std::fmt::Debug;
+
+    use rand::seq::SliceRandom;
+    use rand::{thread_rng, Rng};
+    use crate::router::tree::art::node::keys::ArrayKey;
+    use crate::router::tree::art::node::partials::ArrPartial;
+
+
+    use crate::router::tree::art::tree::RawTree;
+
+    #[test]
+    fn test_root_set_get() {
+        let mut q = RawTree::<ArrPartial<16>, i32>::new();
+        let key = ArrayKey::from_str("abc");
+        assert!(q.insert(&key, 1).is_none());
+        assert_eq!(q.get(&key), Some(&1));
+    }
+
+    #[test]
+    fn test_string_keys_get_set() {
+        let mut q = RawTree::<ArrPartial<16>, i32>::new();
+        q.insert(&ArrayKey::from_str("abcd"), 1);
+        q.insert(&ArrayKey::from_str("abc"), 2);
+        q.insert(&ArrayKey::from_str("abcde"), 3);
+        q.insert(&ArrayKey::from_str("xyz"), 4);
+        q.insert(&ArrayKey::from_str("xyz"), 5);
+        q.insert(&ArrayKey::from_str("axyz"), 6);
+        q.insert(&ArrayKey::from_str("1245zzz"), 6);
+
+        assert_eq!(*q.get(&ArrayKey::from_str("abcd")).unwrap(), 1);
+        assert_eq!(*q.get(&ArrayKey::from_str("abc")).unwrap(), 2);
+        assert_eq!(*q.get(&ArrayKey::from_str("abcde")).unwrap(), 3);
+        assert_eq!(*q.get(&ArrayKey::from_str("axyz")).unwrap(), 6);
+        assert_eq!(*q.get(&ArrayKey::from_str("xyz")).unwrap(), 5);
+
+        assert_eq!(q.remove(&ArrayKey::from_str("abcde")), Some(3));
+        assert_eq!(q.get(&ArrayKey::from_str("abcde")), None);
+        assert_eq!(*q.get(&ArrayKey::from_str("abc")).unwrap(), 2);
+        assert_eq!(*q.get(&ArrayKey::from_str("axyz")).unwrap(), 6);
+        assert_eq!(q.remove(&ArrayKey::from_str("abc")), Some(2));
+        assert_eq!(q.get(&ArrayKey::from_str("abc")), None);
+    }
+
+    #[test]
+    fn test_int_keys_get_set() {
+        let mut q = RawTree::<ArrPartial<16>, i32>::new();
+        q.insert::<ArrayKey<16>>(&500i32.into(), 3);
+        assert_eq!(q.get::<ArrayKey<16>>(&500i32.into()), Some(&3));
+        q.insert::<ArrayKey<16>>(&666i32.into(), 2);
+        assert_eq!(q.get::<ArrayKey<16>>(&666i32.into()), Some(&2));
+        q.insert::<ArrayKey<16>>(&1i32.into(), 1);
+        assert_eq!(q.get::<ArrayKey<16>>(&1i32.into()), Some(&1));
+    }
+
+    fn gen_random_string_keys<const S: usize>(
+        l1_prefix: usize,
+        l2_prefix: usize,
+        suffix: usize,
+    ) -> Vec<(ArrayKey<S>, String)> {
+        let mut keys = Vec::new();
+        let chars: Vec<char> = ('a'..='z').collect();
+        for i in 0..chars.len() {
+            let level1_prefix = chars[i].to_string().repeat(l1_prefix);
+            for i in 0..chars.len() {
+                let level2_prefix = chars[i].to_string().repeat(l2_prefix);
+                let key_prefix = level1_prefix.clone() + &level2_prefix;
+                for _ in 0..=u8::MAX {
+                    let suffix: String = (0..suffix)
+                        .map(|_| chars[thread_rng().gen_range(0..chars.len())])
+                        .collect();
+                    let string = key_prefix.clone() + &suffix;
+                    let k = string.clone().into();
+                    keys.push((k, string));
+                }
+            }
+        }
+
+        keys.shuffle(&mut thread_rng());
+        keys
+    }
+
+    #[test]
+    fn test_bulk_random_string_query() {
+        let mut tree = RawTree::<ArrPartial<16>, String>::new();
+        let keys = gen_random_string_keys(3, 2, 3);
+        let mut num_inserted = 0;
+        for (_i, key) in keys.iter().enumerate() {
+            println!("{:?}", key.1.clone() );
+            if tree.insert(&key.0, key.1.clone()).is_none() {
+                num_inserted += 1;
+                assert!(tree.get(&key.0).is_some());
+            }
+        }
+        let mut rng = thread_rng();
+        for _i in 0..5 {
+            let entry = &keys[rng.gen_range(0..keys.len())];
+            let val = tree.get(&entry.0);
+            assert!(val.is_some());
+            assert_eq!(*val.unwrap(), entry.1);
+        }
+    }
+
+    // #[test]
+    // fn test_random_numeric_insert_get() {
+    //     let mut tree = AdaptiveRadixTree::<ArrPartial<16>, u64>::new();
+    //     let count = 100_000;
+    //     let mut rng = thread_rng();
+    //     let mut keys_inserted = vec![];
+    //     for i in 0..count {
+    //         let value = i;
+    //         let rnd_key = rng.gen_range(0..count);
+    //         let rnd_key: ArrayKey<16> = rnd_key.into();
+    //         if tree.get(&rnd_key).is_none() && tree.insert(&rnd_key, value).is_none() {
+    //             let result = tree.get(&rnd_key);
+    //             assert!(result.is_some());
+    //             assert_eq!(*result.unwrap(), value);
+    //             keys_inserted.push((rnd_key, value));
+    //         }
+    //     }
+    //
+    //     let stats = tree.get_tree_stats();
+    //     assert_eq!(stats.num_values, keys_inserted.len());
+    //
+    //     for (key, value) in &keys_inserted {
+    //         let result = tree.get(key);
+    //         assert!(result.is_some(),);
+    //         assert_eq!(*result.unwrap(), *value,);
+    //     }
+    // }
+
+    // fn from_be_bytes_key(k: &Vec<u8>) -> u64 {
+    //     let k = if k.len() < 8 {
+    //         let mut new_k = vec![0; 8];
+    //         new_k[8 - k.len()..].copy_from_slice(k);
+    //         new_k
+    //     } else {
+    //         k.clone()
+    //     };
+    //     let k = k.as_slice();
+    //
+    //     u64::from_be_bytes(k[0..8].try_into().unwrap())
+    // }
+
+    // #[test]
+    // fn test_iter() {
+    //     let mut tree = AdaptiveRadixTree::<ArrPartial<16>, u64>::new();
+    //     let count = 10000;
+    //     let mut rng = thread_rng();
+    //     let mut keys_inserted = BTreeSet::new();
+    //     for i in 0..count {
+    //         let _value = i;
+    //         let rnd_val = rng.gen_range(0..count);
+    //         let rnd_key: ArrayKey<16> = rnd_val.into();
+    //         if tree.get(&rnd_key).is_none() && tree.insert(&rnd_key, rnd_val).is_none() {
+    //             let result = tree.get(&rnd_key);
+    //             assert!(result.is_some());
+    //             assert_eq!(*result.unwrap(), rnd_val);
+    //             keys_inserted.insert((rnd_val, rnd_val));
+    //         }
+    //     }
+    //
+    //     // Iteration of keys_inserted and tree should be the same, so we should be able to zip the
+    //     // keys of the tree and the elements of keys_inserted and get the same result.
+    //     let tree_iter = tree.iter();
+    //     let keys_inserted_iter = keys_inserted.iter();
+    //     for (tree_entry, (inserted_key, _)) in tree_iter.zip(keys_inserted_iter) {
+    //         let k = from_be_bytes_key(&tree_entry.0);
+    //         // eprintln!("k: {}, inserted_key: {}", k, inserted_key);
+    //         assert_eq!(
+    //             k,
+    //             *inserted_key,
+    //             "k: {}, inserted_key: {}; prefix: {:?}, inserted_be: {:?}, value: {}",
+    //             k,
+    //             inserted_key,
+    //             tree_entry.0.as_slice(),
+    //             inserted_key.to_be_bytes(),
+    //             tree_entry.1
+    //         );
+    //     }
+    // }
+
+    // #[test]
+    // // The following cases were found by fuzzing, and identified bugs in `remove`
+    // fn test_delete_regressions() {
+    //     // DO_INSERT,12297829382473034287,72245244022401706
+    //     // DO_INSERT,12297829382473034410,5425513372477729450
+    //     // DO_DELETE,12297829382473056255,Some(5425513372477729450),None
+    //     let mut tree = AdaptiveRadixTree::<ArrPartial<16>, usize>::new();
+    //     assert!(tree.insert(&ArrayKey::new_from_unsigned(12297829382473034287usize), 72245244022401706usize).is_none());
+    //     assert!(tree.insert(&ArrayKey::new_from_unsigned(12297829382473034410usize), 5425513372477729450usize).is_none());
+    //     // assert!(tree.remove(&ArrayKey::new_from_unsigned(12297829382473056255usize)).is_none());
+    //
+    //     let mut tree = AdaptiveRadixTree::<ArrPartial<16>, usize>::new();
+    //     // DO_INSERT,0,8101975729639522304
+    //     // DO_INSERT,4934144,18374809624973934592
+    //     // DO_DELETE,0,None,Some(8101975729639522304)
+    //     assert!(tree.insert(&ArrayKey::new_from_unsigned(0usize), 8101975729639522304usize).is_none());
+    //     assert!(tree.insert(&ArrayKey::new_from_unsigned(4934144usize), 18374809624973934592usize).is_none());
+    //     assert_eq!(tree.get(&ArrayKey::new_from_unsigned(0usize)), Some(&8101975729639522304usize));
+    //     assert_eq!(tree.remove(&ArrayKey::new_from_unsigned(0usize)), Some(8101975729639522304usize));
+    //     assert_eq!(tree.get(&ArrayKey::new_from_unsigned(4934144usize)), Some(&18374809624973934592usize));
+    //
+    //     // DO_INSERT,8102098874941833216,8101975729639522416
+    //     // DO_INSERT,8102099357864587376,18374810107896688752
+    //     // DO_DELETE,0,Some(8101975729639522416),None
+    //     let mut tree = AdaptiveRadixTree::<ArrPartial<16>, usize>::new();
+    //     assert!(tree.insert(&ArrayKey::new_from_unsigned(8102098874941833216usize), 8101975729639522416usize).is_none());
+    //     assert!(tree.insert(&ArrayKey::new_from_unsigned(8102099357864587376usize), 18374810107896688752usize).is_none());
+    //     assert_eq!(tree.get(&ArrayKey::new_from_unsigned(0usize)), None);
+    //     assert_eq!(tree.remove(&ArrayKey::new_from_unsigned(0usize)), None);
+    // }
+    //
+    // #[test]
+    // fn test_delete() {
+    //     // Insert a bunch of random keys and values into both a btree and our tree, then iterate
+    //     // over the btree and delete the keys from our tree. Then, iterate over our tree and make
+    //     // sure it's empty.
+    //     let mut tree = AdaptiveRadixTree::<ArrPartial<16>, u64>::new();
+    //     let mut btree = BTreeMap::new();
+    //     let count = 5_000;
+    //     let mut rng = thread_rng();
+    //     for i in 0..count {
+    //         let _value = i;
+    //         let rnd_val = rng.gen_range(0..u64::MAX);
+    //         let rnd_key: ArrayKey<16> = rnd_val.into();
+    //         tree.insert(&rnd_key, rnd_val);
+    //         btree.insert(rnd_val, rnd_val);
+    //     }
+    //
+    //     for (key, value) in btree.iter() {
+    //         let key: ArrayKey<16> = (*key).into();
+    //         let get_result = tree.get(&key);
+    //         assert_eq!(
+    //             get_result.cloned(),
+    //             Some(*value),
+    //             "Key with prefix {:?} not found in tree; it should be",
+    //             key.to_prefix(0).to_slice()
+    //         );
+    //         let result = tree.remove(&key);
+    //         assert_eq!(result, Some(*value));
+    //     }
+    // }
+    // // Compare the results of a range query on an AdaptiveRadixTree and a BTreeMap, because we can
+    // // safely assume the latter exhibits correct behavior.
+    // fn test_range_matches<'a, K: KeyTrait<P>, P: PrefixTraits, V: PartialEq + Debug + 'a>(
+    //     art_range: tree::Range<'a, K, P, V>,
+    //     btree_range: btree_map::Range<'a, u64, V>,
+    // ) {
+    //     for (art_entry, btree_entry) in art_range.zip(btree_range) {
+    //         let art_key = from_be_bytes_key(&art_entry.0);
+    //         assert_eq!(art_key, *btree_entry.0);
+    //         assert_eq!(art_entry.1, btree_entry.1);
+    //     }
+    // }
+    //
+    // #[test]
+    // fn test_range() {
+    //     let mut tree = AdaptiveRadixTree::<ArrPartial<16>, u64>::new();
+    //     let count = 10000;
+    //     let mut rng = thread_rng();
+    //     let mut keys_inserted = BTreeMap::new();
+    //     for i in 0..count {
+    //         let _value = i;
+    //         let rnd_val = rng.gen_range(0..count);
+    //         let rnd_key: ArrayKey<16> = rnd_val.into();
+    //         if tree.get(&rnd_key).is_none() && tree.insert(&rnd_key, rnd_val).is_none() {
+    //             let result = tree.get(&rnd_key);
+    //             assert!(result.is_some());
+    //             assert_eq!(*result.unwrap(), rnd_val);
+    //             keys_inserted.insert(rnd_val, rnd_val);
+    //         }
+    //     }
+    //
+    //     // Test for range with unbounded start and exclusive end
+    //     let end_key: ArrayKey<16> = 100.into();
+    //     let t_r = tree.range(..end_key);
+    //     let k_r = keys_inserted.range(..100);
+    //     test_range_matches(t_r, k_r);
+    //
+    //     // Test for range with unbounded start and inclusive end.
+    //     let t_r = tree.range(..=end_key);
+    //     let k_r = keys_inserted.range(..=100);
+    //     test_range_matches(t_r, k_r);
+    //
+    //     // Test for range with unbounded end and exclusive start
+    //     let start_key: ArrayKey<16> = 100.into();
+    //     let t_r = tree.range(start_key..);
+    //     let k_r = keys_inserted.range(100..);
+    //     test_range_matches(t_r, k_r);
+    //
+    //     // Test for range with bounded start and end (exclusive)
+    //     let end_key: ArrayKey<16> = 1000.into();
+    //     let t_r = tree.range(start_key..end_key);
+    //     let k_r = keys_inserted.range(100..1000);
+    //     test_range_matches(t_r, k_r);
+    //
+    //     // Test for range with bounded start and end (inclusive)
+    //     let t_r = tree.range(start_key..=end_key);
+    //     let k_r = keys_inserted.range(100..=1000);
+    //     test_range_matches(t_r, k_r);
+    // }
+}

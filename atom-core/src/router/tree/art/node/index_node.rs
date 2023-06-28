@@ -1,6 +1,7 @@
 use std::mem::MaybeUninit;
 use crate::router::tree::art::node::bit_array::BitArray;
 use crate::router::tree::art::node::bit_set::{Bitset64, BitsetTrait};
+use crate::router::tree::art::node::direct_node::DirectNode;
 use crate::router::tree::art::node::node::KeyedNode;
 use crate::router::tree::art::node::NodeTrait;
 
@@ -26,16 +27,16 @@ impl<N, const WIDTH: usize, Bitset: BitsetTrait> IndexNode<N, WIDTH, Bitset> {
         }
     }
 
-    // pub(crate) fn from_direct(dm: &mut DirectMapping<N>) -> Self {
-    //     let mut indexed = IndexedMapping::new();
-    //
-    //     let keys: Vec<usize> = dm.children.iter_keys().collect();
-    //     for key in keys {
-    //         let child = dm.children.erase(key).unwrap();
-    //         indexed.add_child(key as u8, child);
-    //     }
-    //     indexed
-    // }
+    pub(crate) fn from_direct(dm: &mut DirectNode<N>) -> Self {
+        let mut indexed = IndexNode::new();
+
+        let keys: Vec<usize> = dm.children.iter_keys().collect();
+        for key in keys {
+            let child = dm.children.erase(key).unwrap();
+            indexed.add_child(key as u8, child);
+        }
+        indexed
+    }
 
     pub fn from_keyed<const KM_WIDTH: usize, FromBitset: BitsetTrait>(
         km: &mut KeyedNode<N, KM_WIDTH, FromBitset>,
@@ -52,7 +53,7 @@ impl<N, const WIDTH: usize, Bitset: BitsetTrait> IndexNode<N, WIDTH, Bitset> {
         im
     }
 
-    pub(crate) fn move_into<const NEW_WIDTH: usize, NM: NodeTrait<N, NEW_WIDTH>>(
+    pub(crate) fn move_into<const NEW_WIDTH: usize, NM: NodeTrait<N>>(
         &mut self,
         nm: &mut NM,
     ) {
@@ -69,7 +70,7 @@ impl<N, const WIDTH: usize, Bitset: BitsetTrait> IndexNode<N, WIDTH, Bitset> {
     }
 }
 
-impl<N, const WIDTH: usize, Bitset: BitsetTrait> NodeTrait<N, WIDTH>
+impl<N, const WIDTH: usize, Bitset: BitsetTrait> NodeTrait<N>
 for IndexNode<N, WIDTH, Bitset>
 {
     fn add_child(&mut self, key: u8, node: N) {
@@ -114,6 +115,11 @@ for IndexNode<N, WIDTH, Bitset>
 
     fn num_children(&self) -> usize {
         self.num_children as usize
+    }
+
+    #[inline]
+    fn width(&self) -> u16 {
+        WIDTH as u16
     }
 }
 

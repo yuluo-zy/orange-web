@@ -9,7 +9,7 @@ pub struct BitArray<X, const RANGE_WIDTH: usize, BitsetType>
         BitsetType: BitsetTrait,
 {
     pub(crate) bitset: BitsetType,
-    storage: [MaybeUninit<X>; RANGE_WIDTH],
+    storage: Box<[MaybeUninit<X>; RANGE_WIDTH]>,
 }
 
 impl<X, const RANGE_WIDTH: usize, BitsetType> BitArray<X, RANGE_WIDTH, BitsetType>
@@ -19,7 +19,7 @@ impl<X, const RANGE_WIDTH: usize, BitsetType> BitArray<X, RANGE_WIDTH, BitsetTyp
     pub fn new() -> Self {
         Self {
             bitset: Default::default(),
-            storage: unsafe { MaybeUninit::uninit().assume_init() },
+            storage:Box::new( unsafe { MaybeUninit::uninit().assume_init() }),
         }
     }
 

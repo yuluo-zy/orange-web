@@ -1,6 +1,7 @@
 use crate::router::tree::art::node::{ NodeTrait};
 use crate::router::tree::art::node::bit_array::BitArray;
 use crate::router::tree::art::node::bit_set::BitsetTrait;
+use crate::router::tree::art::node::index_node::IndexNode;
 use crate::router::tree::art::utils::u8_keys_find_key_position;
 
 
@@ -9,7 +10,6 @@ pub struct KeyedNode<N, const WIDTH: usize, Bitset>
     where
         Bitset: BitsetTrait,
 {
-    // pub(crate) base: BaseNode,
     pub(crate) keys: [u8; WIDTH],
     pub(crate) children: BitArray<N, WIDTH, Bitset>,
     pub(crate) num_children: u8,
@@ -31,21 +31,20 @@ impl<N, const WIDTH: usize, Bitset> KeyedNode<N, WIDTH, Bitset>
     #[inline]
     pub fn new() -> Self {
         Self {
-            // base: BaseNode::new(),
             keys: [255; WIDTH],
             children: Default::default(),
             num_children: 0,
         }
     }
 
-    // pub(crate) fn from_indexed<const IDX_WIDTH: usize, FromBitset: BitsetTrait>(
-    //     im: &mut IndexedMapping<N, IDX_WIDTH, FromBitset>,
-    // ) -> Self {
-    //     let mut new_mapping = KeyedNode::new();
-    //     im.num_children = 0;
-    //     im.move_into(&mut new_mapping);
-    //     new_mapping
-    // }
+    pub(crate) fn from_indexed<const IDX_WIDTH: usize, FromBitset: BitsetTrait>(
+        im: &mut IndexNode<N, IDX_WIDTH, FromBitset>,
+    ) -> Self {
+        let mut new_mapping = KeyedNode::new();
+        im.num_children = 0;
+        im.move_into::<WIDTH, KeyedNode<N, WIDTH, Bitset>>(&mut new_mapping);
+        new_mapping
+    }
 
     pub fn from_resized_grow<const OLD_WIDTH: usize, OldBitset: BitsetTrait>(
         km: &mut KeyedNode<N, OLD_WIDTH, OldBitset>,
@@ -100,7 +99,7 @@ impl<N, const WIDTH: usize, Bitset> KeyedNode<N, WIDTH, Bitset>
     }
 }
 
-impl<N, const WIDTH: usize, Bitset: BitsetTrait> NodeTrait<N, WIDTH>
+impl<N, const WIDTH: usize, Bitset: BitsetTrait> NodeTrait<N>
 for KeyedNode<N, WIDTH, Bitset>
 {
     #[inline]
@@ -158,6 +157,11 @@ for KeyedNode<N, WIDTH, Bitset>
     #[inline(always)]
     fn num_children(&self) -> usize {
         self.num_children as usize
+    }
+
+    #[inline]
+    fn width(&self) -> u16 {
+        WIDTH as u16
     }
 }
 

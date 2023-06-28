@@ -1,5 +1,6 @@
 use crate::router::tree::art::node::bit_array::BitArray;
 use crate::router::tree::art::node::bit_set::{Bitset64, BitsetTrait};
+use crate::router::tree::art::node::index_node::IndexNode;
 use crate::router::tree::art::node::NodeTrait;
 
 pub struct DirectNode<N> {
@@ -21,14 +22,14 @@ impl<N> DirectNode<N> {
         }
     }
 
-    // pub fn from_indexed<const WIDTH: usize, FromBitset: BitsetTrait>(
-    //     im: &mut IndexedMapping<N, WIDTH, FromBitset>,
-    // ) -> Self {
-    //     let mut new_mapping = DirectMapping::<N>::new();
-    //     im.num_children = 0;
-    //     im.move_into(&mut new_mapping);
-    //     new_mapping
-    // }
+    pub fn from_indexed<const WIDTH: usize, FromBitset: BitsetTrait>(
+        im: &mut IndexNode<N, WIDTH, FromBitset>,
+    ) -> Self {
+        let mut new_mapping = DirectNode::<N>::new();
+        im.num_children = 0;
+        im.move_into::<WIDTH, DirectNode<N>>(&mut new_mapping);
+        new_mapping
+    }
 
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (u8, &N)> {
@@ -36,7 +37,7 @@ impl<N> DirectNode<N> {
     }
 }
 
-impl<N> NodeTrait<N, 256> for DirectNode<N> {
+impl<N> NodeTrait<N> for DirectNode<N> {
     #[inline]
     fn add_child(&mut self, key: u8, node: N) {
         self.children.set(key as usize, node);
@@ -69,6 +70,11 @@ impl<N> NodeTrait<N, 256> for DirectNode<N> {
     #[inline]
     fn num_children(&self) -> usize {
         self.num_children
+    }
+
+    #[inline]
+    fn width(&self) -> u16 {
+        256
     }
 }
 
