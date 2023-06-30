@@ -7,6 +7,7 @@ pub trait Partial {
     fn partial_after(&self, start: usize) -> Self;
     fn at(&self, pos: usize) -> u8;
     fn len(&self) -> usize;
+    fn empty() -> Self;
     fn length_at(&self, at_depth: usize) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0
@@ -103,6 +104,13 @@ impl<const SIZE: usize> Partial for RawKey<SIZE> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.len
+    }
+
+    fn empty() -> Self {
+        Self {
+            data: [0; SIZE],
+            len: 0,
+        }
     }
 
     fn length_at(&self, at_depth: usize) -> usize {
@@ -326,6 +334,12 @@ impl Partial for VectorKey {
 
     fn len(&self) -> usize {
         self.data.len()
+    }
+
+    fn empty() -> Self {
+        Self{
+            data: vec![],
+        }
     }
 
     fn length_at(&self, at_depth: usize) -> usize {

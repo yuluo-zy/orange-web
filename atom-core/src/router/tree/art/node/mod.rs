@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::router::tree::art::node::bit_set::{Bitset16, Bitset64, Bitset8};
 use crate::router::tree::art::node::direct_node::DirectNode;
 use crate::router::tree::art::node::index_node::IndexNode;
@@ -43,6 +43,7 @@ pub trait NodeTrait<N> {
 }
 
 pub(crate) enum TreeNode<P: Partial, V> {
+    Empty,
     Leaf(NodeLeaf<P, V>),
     Node4(KeyedNode<Node<P, V>, 4, Bitset8<1>>),
     Node16(KeyedNode<Node<P, V>, 16, Bitset16<1>>),
@@ -52,6 +53,7 @@ pub(crate) enum TreeNode<P: Partial, V> {
 
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
 pub enum NodeType {
+    Empty,
     Leaf,
     Node4,
     Node16,
@@ -96,22 +98,29 @@ impl<P: Partial, V> Node<P, V> {
         }
     }
 
+    pub(crate) fn empty_leaf() -> Self {
+        let node = TreeNode::Empty;
 
-    // #[inline]
-    // pub(crate) fn read_lock(&self) -> Result<ReadGuard, ArtError> {
-    //
-    //     // 乐观锁实现
-    //     let version = self.type_version_lock_obsolete.load(Ordering::Acquire);
-    //
-    //     // #[cfg(test)]
-    //     // crate::utils::fail_point(ArtError::Locked(version))?;
-    //
-    //     if Self::is_locked(version) || Self::is_obsolete(version) {
-    //         return Err(ArtError::Locked(version));
-    //     }
-    //
-    //     Ok(ReadGuard::new(version, self))
-    // }
+        Self {
+            prefix: P::empty(),
+            type_version_lock_obsolete: AtomicUsize::new(0),
+            tree_node: node,
+            value: PhantomData,
+        }
+    }
+
+
+    #[inline]
+    pub(crate) fn read_lock(&self) -> Result<ReadGuard<P,V>, TreeError> {
+
+        // 乐观锁实现
+        let version = self.type_version_lock_obsolete.load(Ordering::Acquire);
+        if Self::is_locked(version) || Self::is_obsolete(version) {
+            return Err(TreeError::Locked);
+        }
+
+        Ok(ReadGuard::new(version, self))
+    }
 
     fn is_locked(version: usize) -> bool {
         (version & 0b10) == 0b10
@@ -150,7 +159,7 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node16(km) => km.find_child(key),
             TreeNode::Node48(km) => km.find_child(key),
             TreeNode::Node256(children) => children.find_child(key),
-            TreeNode::Leaf(_) => None,
+            _ => None,
         }
     }
     pub fn find_child_mut(&mut self, key: u8) -> Option<&mut Node<P, V>> {
@@ -214,7 +223,7 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node256(pm) => {
                 pm.add_child(key, node);
             }
-            TreeNode::Leaf(_) => unreachable!("Should not be possible."),
+            _ => unreachable!("Should not be possible."),
         }
     }
 
@@ -227,7 +236,7 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node48(im) => self.num_children() >= im.width(),
             // Should not be possible.
             TreeNode::Node256(_) => self.num_children() >= 256,
-            TreeNode::Leaf(_) => unreachable!("Should not be possible."),
+            _ => unreachable!("Should not be possible."),
         }
 
     }
@@ -247,7 +256,7 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node256(dm) => {
                 self.tree_node = TreeNode::Node48(IndexNode::from_direct(dm));
             }
-            TreeNode::Leaf(_) => unreachable!("Should not be possible."),
+           _ => unreachable!("Should not be possible."),
         }
     }
 
@@ -263,7 +272,7 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node256 { .. } => {
                 unreachable!("Should never grow a node256")
             }
-            TreeNode::Leaf(_) => unreachable!("Should not be possible."),
+            _ => unreachable!("Should not be possible."),
         }
     }
 
@@ -273,7 +282,7 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node16 { .. } => 16,
             TreeNode::Node48 { .. } => 48,
             TreeNode::Node256 { .. } => 256,
-            TreeNode::Leaf(_) => 0,
+            _ => 0,
         }
     }
     pub(crate) fn node_type(&self) -> NodeType {
@@ -283,6 +292,7 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node48 { .. } => NodeType::Node48,
             TreeNode::Node256 { .. } => NodeType::Node256,
             TreeNode::Leaf(_) => NodeType::Leaf,
+            TreeNode::Empty => NodeType::Empty,
         }
     }
 
@@ -297,8 +307,14 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node16(n) => n.num_children(),
             TreeNode::Node48(n) => n.num_children(),
             TreeNode::Node256(n) => n.num_children(),
-            TreeNode::Leaf(_) => 0,
+            _ => 0,
         }
+    }
+
+    pub fn change(&mut self, node: Node<P,V>) {
+        self.tree_node = node.tree_node;
+        self.prefix = node.prefix;
+        self.type_version_lock_obsolete = node.type_version_lock_obsolete;
     }
 
     // #[allow(dead_code)]

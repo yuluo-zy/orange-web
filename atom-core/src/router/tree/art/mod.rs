@@ -1,8 +1,9 @@
-use std::alloc::{Allocator, AllocError, Layout};
-use std::marker::PhantomData;
-use std::ptr::NonNull;
-use std::sync::Arc;
-// use crate::router::tree::art::tree::RawTree;
+use std::cell::UnsafeCell;
+use crate::router::tree::art::tree::{PrefixTraits, RawTree};
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 mod tree;
 pub mod node;
@@ -15,52 +16,150 @@ pub mod guard;
 /// https://zhuanlan.zhihu.com/p/65414186
 /// 并发优化
 /// https://oreki.blog.csdn.net/article/details/130119444?spm=1001.2101.3001.6650.1&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-130119444-blog-119805160.235%5Ev38%5Epc_relevant_sort_base1&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-130119444-blog-119805160.235%5Ev38%5Epc_relevant_sort_base1&utm_relevant_index=2
-#[derive(Clone)]
-pub struct ArtAllocator;
 
-unsafe impl Sync for ArtAllocator {}
-unsafe impl Send for ArtAllocator {}
-
-
-pub fn get_art_allocator() -> Arc<ArtAllocator> {
-    return Arc::new(ArtAllocator {});
+pub mod epoch {
+    pub use crossbeam_epoch::{pin, Guard};
 }
 
-unsafe impl Allocator for ArtAllocator {
-    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        let ptr = unsafe { std::alloc::alloc(layout) };
-        let ptr_slice = std::ptr::slice_from_raw_parts_mut(ptr, layout.size());
-        Ok(NonNull::new(ptr_slice).unwrap())
-    }
-
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        std::alloc::dealloc(ptr.as_ptr(), layout);
-    }
-}
-pub trait TreeKeyTrait {
-    fn len(&self) -> usize;
-
-    fn as_bytes(&self) -> &[u8];
+pub(crate) struct ArtTree<K: PrefixTraits,V> {
+    inner: RawTree<K,V>,
 }
 
-impl TreeKeyTrait for String {
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    fn as_bytes(&self) -> &[u8] {
-        self.as_bytes()
-    }
-}
-pub(crate) struct ArtTree<K,V> where K: TreeKeyTrait {
-    // inner: RawTree<K,V>,
-    pr_key: PhantomData<K>,
-    pr_value: PhantomData<V>
-}
-
-impl<K: TreeKeyTrait, V> Default for ArtTree<K, V> {
+impl<K: PrefixTraits, V> Default for ArtTree<K, V> {
     fn default() -> Self {
-       todo!()
+     Self {
+         inner: RawTree::new()
+     }
     }
 }
 
+impl<K: PrefixTraits, V> ArtTree<K,V> {
+
+    pub fn pin(&self) -> epoch::Guard {
+        crossbeam_epoch::pin()
+    }
+
+    pub fn get<T: Into<K>>(&self, key: T, guard: &epoch::Guard) -> Option<&V> {
+        let key = key.into();
+        self.inner.get(&key, guard)
+    }
+
+    // pub fn get_mut<T: Into<K>>(&mut self, key: &K, guard: &epoch::Guard) ->Option<&mut V> {
+    //
+    // }
+    //
+    pub fn insert<T: Into<K>>(&self, key: T, value: V, guard: &epoch::Guard)-> Option<V> {
+        let key = key.into();
+        self.inner.insert(key, value, guard)
+    }
+}
+
+
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+    use std::thread;
+    use rand::prelude::StdRng;
+    use rand::seq::SliceRandom;
+    use rand::{thread_rng, Rng, SeedableRng};
+    use crate::router::tree::art::node::keys::RawKey;
+    use crate::router::tree::art::tree::RawTree;
+
+    #[test]
+    fn test_concurrent_insert() {
+        let key_cnt_per_thread = 5_000;
+        let n_thread = 3;
+        let mut key_space = Vec::with_capacity(key_cnt_per_thread * n_thread);
+        for i in 0..key_space.capacity() {
+            key_space.push(i);
+        }
+        let mut r = StdRng::seed_from_u64(42);
+        key_space.shuffle(&mut r);
+
+        let key_space = Arc::new(key_space);
+
+        let tree = Arc::new(RawTree::<RawKey<8>, usize>::new());
+
+        let mut handlers = Vec::new();
+        for t in 0..n_thread {
+            let key_space = key_space.clone();
+            let mut tree = tree.clone();
+
+            handlers.push(thread::spawn(move || {
+                let guard = crossbeam_epoch::pin();
+                for i in 0..key_cnt_per_thread {
+                    let idx = t * key_cnt_per_thread + i;
+                    let val = key_space[idx];
+                    tree.insert(&RawKey::from(val), val, &guard).unwrap();
+                }
+            }));
+        }
+
+        for h in handlers.into_iter() {
+            h.join().unwrap();
+        }
+
+        let guard = crossbeam_epoch::pin();
+        for v in key_space.iter() {
+            let val = tree.get(&RawKey::from(*v), &guard).unwrap();
+            assert_eq!(*val, *v);
+        }
+    }
+
+    // #[test]
+    // fn test_concurrent_insert_read() {
+    //     let key_cnt_per_thread = 5_000;
+    //     let w_thread = 2;
+    //     let mut key_space = Vec::with_capacity(key_cnt_per_thread * w_thread);
+    //     for i in 0..key_space.capacity() {
+    //         key_space.push(i);
+    //     }
+    //
+    //     let mut r = StdRng::seed_from_u64(42);
+    //     key_space.shuffle(&mut r);
+    //
+    //     let key_space = Arc::new(key_space);
+    //
+    //     let tree = Arc::new(RawTree::default());
+    //
+    //     let mut handlers = Vec::new();
+    //     for t in 0..w_thread {
+    //         let key_space = key_space.clone();
+    //         let tree = tree.clone();
+    //         handlers.push(thread::spawn(move || {
+    //             let guard = crossbeam_epoch::pin();
+    //             for i in 0..key_cnt_per_thread {
+    //                 let idx = t * key_cnt_per_thread + i;
+    //                 let val = key_space[idx];
+    //                 tree.insert(GeneralKey::key_from(val), val, &guard).unwrap();
+    //             }
+    //         }));
+    //     }
+    //
+    //     let r_thread = 2;
+    //     for t in 0..r_thread {
+    //         let tree = tree.clone();
+    //         handlers.push(thread::spawn(move || {
+    //             let mut r = StdRng::seed_from_u64(10 + t);
+    //             let guard = crossbeam_epoch::pin();
+    //             for _i in 0..key_cnt_per_thread {
+    //                 let val = r.gen_range(0..(key_cnt_per_thread * w_thread));
+    //                 if let Some(v) = tree.get(&GeneralKey::key_from(val), &guard) {
+    //                     assert_eq!(v, val);
+    //                 }
+    //             }
+    //         }));
+    //     }
+    //
+    //     for h in handlers.into_iter() {
+    //         h.join().unwrap();
+    //     }
+    //
+    //     let guard = crossbeam_epoch::pin();
+    //     for v in key_space.iter() {
+    //         let val = tree.get(&GeneralKey::key_from(*v), &guard).unwrap();
+    //         assert_eq!(val, *v);
+    //     }
+    // }
+}

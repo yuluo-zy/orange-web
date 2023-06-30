@@ -3,12 +3,12 @@ use crate::router::tree::art::node::{Node, NodeTrait};
 use crate::router::tree::art::node::keys::Partial;
 use crate::router::tree::art::utils::TreeError;
 
-pub(crate) struct ConcreteReadGuard<'a,P: Partial + Clone,V> {
+pub(crate) struct ConcreteReadGuard<'a,P: Partial,V> {
     version: usize,
     node: &'a UnsafeCell<Node<P,V>>,
 }
 
-impl<'a,P: Partial + Clone,V> ConcreteReadGuard<'a,P,V> {
+impl<'a,P: Partial,V> ConcreteReadGuard<'a,P,V> {
     pub(crate) fn as_ref(&self) -> &Node<P,V> {
         unsafe {
             &*self.node.get()
@@ -34,21 +34,26 @@ impl<'a,P: Partial + Clone,V> ConcreteReadGuard<'a,P,V> {
     }
 }
 
-pub(crate) struct ReadGuard<'a,P: Partial + Clone,V> {
+pub(crate) struct ReadGuard<'a,P: Partial,V> {
     version: usize,
     node: &'a UnsafeCell<Node<P,V>>,
 }
 
-impl<'a,P: Partial + Clone,V> ReadGuard<'a, P, V> {
+impl<'a,P: Partial,V> ReadGuard<'a, P, V> {
     pub(crate) fn new(v: usize, node: &'a Node<P,V>) -> Self {
         Self {
             version: v,
             node: unsafe { &*(node as *const Node<P,V> as *const UnsafeCell<Node<P,V>>) },
         }
     }
-    pub(crate) fn as_ref(&self) -> &Node<P,V> {
+    pub(crate) fn as_ref(&self) -> &'a Node<P,V> {
         unsafe { &*self.node.get() }
     }
+
+    pub(crate) fn as_mut(&self) -> &mut Node<P,V> {
+        unsafe { self.node.get() as &mut Node<P,V> }
+    }
+
     pub(crate) fn check_version(&self) -> Result<usize, TreeError> {
         let v = self
             .as_ref()
@@ -75,8 +80,6 @@ impl<'a,P: Partial + Clone,V> ReadGuard<'a, P, V> {
         }
     }
 
-
-
     pub(crate) fn upgrade(self) -> Result<WriteGuard<'a, P,V>, (Self, TreeError)> {
         let new_version = self.version + 0b10;
         match self
@@ -96,11 +99,11 @@ impl<'a,P: Partial + Clone,V> ReadGuard<'a, P, V> {
     }
 }
 
-pub(crate) struct ConcreteWriteGuard<'a, P: Partial + Clone,V> {
+pub(crate) struct ConcreteWriteGuard<'a, P: Partial,V> {
     node: &'a mut Node<P,V>,
 }
 
-impl<'a, P: Partial + Clone,V> ConcreteWriteGuard<'a,P,V > {
+impl<'a, P: Partial,V> ConcreteWriteGuard<'a,P,V > {
     pub(crate) fn as_ref(&self) -> &Node<P,V> {
         self.node
     }
@@ -116,7 +119,7 @@ impl<'a, P: Partial + Clone,V> ConcreteWriteGuard<'a,P,V > {
     }
 }
 
-impl<'a, P: Partial + Clone,V> Drop for ConcreteWriteGuard<'a,P,V > {
+impl<'a, P: Partial,V> Drop for ConcreteWriteGuard<'a,P,V > {
     fn drop(&mut self) {
         self.node
             .type_version_lock_obsolete
@@ -125,11 +128,11 @@ impl<'a, P: Partial + Clone,V> Drop for ConcreteWriteGuard<'a,P,V > {
 }
 
 
-pub(crate) struct WriteGuard<'a, P: Partial + Clone,V> {
+pub(crate) struct WriteGuard<'a, P: Partial,V> {
     node: &'a mut Node<P, V>,
 }
 
-impl<'a,P: Partial + Clone,V> WriteGuard<'a, P,V> {
+impl<'a,P: Partial,V> WriteGuard<'a, P,V> {
     pub(crate) fn as_ref(&self) -> &Node<P, V> {
         self.node
     }
@@ -145,7 +148,7 @@ impl<'a,P: Partial + Clone,V> WriteGuard<'a, P,V> {
     }
 }
 
-impl<'a,P: Partial + Clone, V> Drop for WriteGuard<'a, P,V> {
+impl<'a,P: Partial, V> Drop for WriteGuard<'a, P,V> {
     fn drop(&mut self) {
         self.node
             .type_version_lock_obsolete
