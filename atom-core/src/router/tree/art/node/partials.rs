@@ -13,10 +13,7 @@ pub trait Partial {
         self.len() == 0
     }
     fn prefix_length_common(&self, other: &Self) -> usize;
-    fn prefix_length_key<'a, P, K>(&self, key: &'a K, at_depth: usize) -> usize
-        where
-            P: Partial,
-            K: KeyTrait<P> + 'a;
+    fn prefix_length_key<'a, P: Partial, K: KeyTrait<P> + 'a>(&self, key: &'a K, at_depth: usize) -> usize;
     fn prefix_length_slice(&self, slice: &[u8]) -> usize;
     fn to_slice(&self) -> &[u8];
 }
@@ -38,7 +35,7 @@ impl<const SIZE: usize> ArrPartial<SIZE> {
     pub fn key(src: &[u8]) -> Self {
         assert!(src.len() < SIZE);
         let mut data = [0; SIZE];
-        data[..src.len()].copy_from_slice(src);
+        data[..src.len()].clone_from_slice(src);
         Self {
             data,
             len: src.len() + 1,
@@ -48,7 +45,7 @@ impl<const SIZE: usize> ArrPartial<SIZE> {
     pub fn from_slice(src: &[u8]) -> Self {
         assert!(src.len() < SIZE);
         let mut data = [0; SIZE];
-        data[..src.len()].copy_from_slice(src);
+        data[..src.len()].clone_from_slice(src);
         Self {
             data,
             len: src.len(),
@@ -95,17 +92,22 @@ impl<const SIZE: usize> Partial for ArrPartial<SIZE> {
         self.len
     }
 
+    #[inline(always)]
     fn prefix_length_common(&self, other: &Self) -> usize {
         self.prefix_length_slice(other.to_slice())
     }
 
+    #[inline(always)]
     fn prefix_length_key<'a, P: Partial, K: KeyTrait<P> + 'a>(
         &self,
         key: &'a K,
         at_depth: usize,
     ) -> usize {
-        let len = min(self.len, key.length_at(at_depth));
-        let len = min(len, SIZE);
+        let mut len = key.length_at(at_depth);
+
+        if self.len < len { len = self.len }
+        if SIZE < len { len = SIZE }
+
         let mut idx = 0;
         while idx < len {
             if self.data[idx] != key.at(idx + at_depth) {
@@ -117,8 +119,10 @@ impl<const SIZE: usize> Partial for ArrPartial<SIZE> {
     }
 
     fn prefix_length_slice(&self, slice: &[u8]) -> usize {
-        let len = min(self.len, slice.len());
-        let len = min(len, SIZE);
+        let mut len = slice.len();
+        if self.len < len { len = self.len }
+        if SIZE < len { len = SIZE }
+
         let mut idx = 0;
         while idx < len {
             if self.data[idx] != slice[idx] {
