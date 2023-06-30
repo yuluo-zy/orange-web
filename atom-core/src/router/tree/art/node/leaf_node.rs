@@ -1,4 +1,4 @@
-use crate::router::tree::art::node::partials::Partial;
+use crate::router::tree::art::node::keys::Partial;
 
 pub struct NodeLeaf<K: Partial, V> {
     pub kay: K,

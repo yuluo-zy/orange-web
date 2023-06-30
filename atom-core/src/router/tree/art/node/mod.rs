@@ -3,16 +3,15 @@ use crate::router::tree::art::node::bit_set::{Bitset16, Bitset64, Bitset8};
 use crate::router::tree::art::node::direct_node::DirectNode;
 use crate::router::tree::art::node::index_node::IndexNode;
 use crate::router::tree::art::node::node::KeyedNode;
-use crate::router::tree::art::node::partials::Partial;
 use std::marker::PhantomData;
 use crossbeam_epoch::Guard;
 use rand::distributions::Open01;
 use crate::router::tree::art::guard::{ConcreteReadGuard, ReadGuard};
+use crate::router::tree::art::node::keys::Partial;
 use crate::router::tree::art::node::leaf_node::NodeLeaf;
 use crate::router::tree::art::utils::TreeError;
 
 pub mod keys;
-pub mod partials;
 pub mod bit_set;
 pub mod bit_array;
 pub mod node;
@@ -43,7 +42,7 @@ pub trait NodeTrait<N> {
     fn width(&self) -> usize;
 }
 
-pub(crate) enum TreeNode<P: Partial + Clone, V> {
+pub(crate) enum TreeNode<P: Partial, V> {
     Leaf(NodeLeaf<P, V>),
     Node4(KeyedNode<Node<P, V>, 4, Bitset8<1>>),
     Node16(KeyedNode<Node<P, V>, 16, Bitset16<1>>),
@@ -60,7 +59,7 @@ pub enum NodeType {
     Node256,
 }
 
-pub(crate) struct Node<P: Partial + Clone, V> {
+pub(crate) struct Node<P: Partial, V> {
     pub(crate) prefix: P,
     pub(crate) type_version_lock_obsolete: AtomicUsize,
     pub(crate) tree_node: TreeNode<P, V>,
@@ -68,7 +67,7 @@ pub(crate) struct Node<P: Partial + Clone, V> {
 }
 
 
-impl<P: Partial + Clone, V> Node<P, V> {
+impl<P: Partial, V> Node<P, V> {
     pub(crate) fn new(node_type: NodeType, prefix: P) -> Self {
         let node = match node_type {
             NodeType::Node4 => { TreeNode::Node4(KeyedNode::new()) }
@@ -87,7 +86,7 @@ impl<P: Partial + Clone, V> Node<P, V> {
     }
 
     pub(crate) fn new_leaf(prefix: P, value: V) -> Self {
-        let node = TreeNode::Leaf(NodeLeaf { kay: prefix.clone(), value: Some(value) });
+        let node = TreeNode::Leaf(NodeLeaf { kay: prefix.partial_after(0), value: Some(value) });
 
         Self {
             prefix,
@@ -317,13 +316,13 @@ impl<P: Partial + Clone, V> Node<P, V> {
 
 #[cfg(test)]
 mod tests {
+    use crate::router::tree::art::node::keys::RawKey;
     use crate::router::tree::art::node::NodeType::{Node16, Node4};
-    use crate::router::tree::art::node::partials::ArrPartial;
     use super::*;
 
     #[test]
     fn test_n4() {
-        let test_key: ArrPartial<16> = ArrPartial::key("abc".as_bytes());
+        let test_key: RawKey<16> = RawKey::from_str("abc");
 
         let mut n4 = Node::new(NodeType::Node4, test_key.clone());
         n4.add_child(5, Node::new_leaf(test_key.clone(), 1));
@@ -354,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_n16() {
-        let test_key: ArrPartial<16> = ArrPartial::key("abc".as_bytes());
+        let test_key: RawKey<16> = RawKey::from_str("abc");
 
         let mut n16 = Node::new(NodeType::Node16, test_key.clone());
 
@@ -399,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_n48() {
-        let test_key: ArrPartial<16> = ArrPartial::key("abc".as_bytes());
+        let test_key: RawKey<16> = RawKey::from_str("abc");
 
         let mut n48 = Node::new(NodeType::Node48, test_key.clone());
 
@@ -423,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_n_256() {
-        let test_key: ArrPartial<16> = ArrPartial::key("abc".as_bytes());
+        let test_key: RawKey<16> = RawKey::from_str("abc");
 
         let mut n256 = Node::new(NodeType::Node256, test_key.clone());
 

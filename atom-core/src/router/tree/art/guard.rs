@@ -1,6 +1,6 @@
 use std::{cell::UnsafeCell, sync::atomic::Ordering};
 use crate::router::tree::art::node::{Node, NodeTrait};
-use crate::router::tree::art::node::partials::Partial;
+use crate::router::tree::art::node::keys::Partial;
 use crate::router::tree::art::utils::TreeError;
 
 pub(crate) struct ConcreteReadGuard<'a,P: Partial + Clone,V> {
