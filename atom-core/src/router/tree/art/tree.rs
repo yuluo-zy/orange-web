@@ -121,7 +121,6 @@ impl<P: PrefixTraits, V> RawTree<P, V> {
     }
     #[inline]
     fn insert_inner(
-        // cur_node: &Node<P, V>,
         &self,
         key: &P,
         value: V,
@@ -131,16 +130,29 @@ impl<P: PrefixTraits, V> RawTree<P, V> {
     {
         let node_lock = self.root.read_lock()?;
 
-        if node_lock.as_ref().node_type() = NodeType::Empty {
+        if node_lock.as_ref().node_type() = NodeType::Empty { // 锁操作
             node_lock.as_mut().change(Node::new_leaf(key.partial_after(0), value));
             return Ok(None);
         }
 
-        let mut next_node = &self.root;
-
         let mut node;
+
         loop {
-            node = next_node.read_lock()?;
+            node = self.root.read_lock()?;
+
+            let longest_common_prefix = node.as_ref().prefix.prefix_length_key(key, depth);
+
+            let is_prefix_match =
+                min(node.as_ref().prefix.len(), key.length_at(depth)) == longest_common_prefix;
+
+            // 前缀匹配 并 当前节点与key完全匹配
+            if is_prefix_match && node.as_ref().prefix.len() == key.length_at(depth) {
+                if let TreeNode::Leaf(ref mut v) = &mut cur_node.tree_node {
+                    return Some(std::mem::replace(v.value_mut()?, value));
+                } else {
+                    panic!("Node type mismatch")
+                }
+            }
 
 
         }

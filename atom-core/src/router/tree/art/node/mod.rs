@@ -111,7 +111,7 @@ impl<P: Partial, V> Node<P, V> {
 
 
     #[inline]
-    pub(crate) fn read_lock(&self) -> Result<ReadGuard<P,V>, TreeError> {
+    pub(crate) fn read_lock(&self) -> Result<ReadGuard<P, V>, TreeError> {
 
         // 乐观锁实现
         let version = self.type_version_lock_obsolete.load(Ordering::Acquire);
@@ -206,9 +206,9 @@ impl<P: Partial, V> Node<P, V> {
 
 
     pub(crate) fn add_child(&mut self, key: u8, node: Node<P, V>) {
-        if self.is_full() {
-            self.grow();
-        }
+        // if self.is_full() {
+        //     self.grow();
+        // }
 
         match &mut self.tree_node {
             TreeNode::Node4(km) => {
@@ -238,7 +238,6 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node256(_) => self.num_children() >= 256,
             _ => unreachable!("Should not be possible."),
         }
-
     }
 
     fn shrink(&mut self) {
@@ -256,18 +255,22 @@ impl<P: Partial, V> Node<P, V> {
             TreeNode::Node256(dm) => {
                 self.tree_node = TreeNode::Node48(IndexNode::from_direct(dm));
             }
-           _ => unreachable!("Should not be possible."),
+            _ => unreachable!("Should not be possible."),
         }
     }
 
-    fn grow(&mut self) {
-        match &mut self.tree_node {
+    fn grow(node: &mut Node<P, V>, guard: &Guard) {
+        match &mut node.tree_node {
             TreeNode::Node4(km) => {
-                self.tree_node = TreeNode::Node16(KeyedNode::from_resized_grow(km))
+                node.tree_node = TreeNode::Node16(KeyedNode::from_resized_grow(km));
+                guard.defer(move || { km.children.clear(); })
             }
-            TreeNode::Node16(km) => self.tree_node = TreeNode::Node48(IndexNode::from_keyed(km)),
+            TreeNode::Node16(km) => {
+                node.tree_node = TreeNode::Node48(IndexNode::from_keyed(km));
+                guard.defer(move || { km.children.clear(); })
+            }
             TreeNode::Node48(im) => {
-                self.tree_node = TreeNode::Node256(DirectNode::from_indexed(im));
+                node.tree_node = TreeNode::Node256(DirectNode::from_indexed(im));
             }
             TreeNode::Node256 { .. } => {
                 unreachable!("Should never grow a node256")
@@ -311,7 +314,7 @@ impl<P: Partial, V> Node<P, V> {
         }
     }
 
-    pub fn change(&mut self, node: Node<P,V>) {
+    pub fn change(&mut self, node: Node<P, V>) {
         self.tree_node = node.tree_node;
         self.prefix = node.prefix;
         self.type_version_lock_obsolete = node.type_version_lock_obsolete;
@@ -327,6 +330,42 @@ impl<P: Partial, V> Node<P, V> {
     //         NodeType::Leaf(_) => Box::new(std::iter::empty()),
     //     };
     // }
+
+    pub(crate) fn insert_unlock<'a>(node: ReadGuard<'a, P, V>, parent: (u8, Option<ReadGuard<P, V>>), val: (u8, Node<P, V>), guard: &Guard) -> Result<(), TreeError> {
+        Self::insert_grow(
+            node.into_concrete(),
+            parent,
+            val,
+            guard,
+        )
+    }
+
+    pub(crate) fn insert_grow<'a>(
+        node: ConcreteReadGuard<'a, P, V>,
+        parent: (u8, Option<ReadGuard<P, V>>),
+        val: (u8, Node<P, V>),
+        guard: &Guard,
+    ) -> Result<(), TreeError> {
+        // 解决 尚未充满的情况
+        if !node.as_ref().is_full() {
+            if let Some(p) = parent.1 {
+                // 子节点修改, 父节点不能出现变更
+                p.unlock()?
+            }
+
+            let mut write_node = node.upgrade().map_err(|v| v.1)?;
+            write_node.as_mut().add_child(val.0, val.1);
+            return Ok(());
+        }
+
+        let p_guard = parent.1.expect("parent node cannot find");
+        // 节点充满的状态下, 则父节点需要存在, 用来锁定, 防止并发读写的时候出现问题
+        p_guard.upgrade().map_err(|v| v.1)?;
+        let mut write_n = node.upgrade().map_err(|v| v.1)?;
+        Self::grow(write_n.as_mut(), guard);
+        write_n.as_mut().add_child(val.0, val.1);
+        Ok(())
+    }
 }
 
 

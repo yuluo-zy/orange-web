@@ -59,7 +59,6 @@ impl<N, const WIDTH: usize, Bitset> KeyedNode<N, WIDTH, Bitset>
                 new.children.set(i, n);
             }
         }
-        km.children.clear();
         new.num_children = km.num_children;
         new
     }
