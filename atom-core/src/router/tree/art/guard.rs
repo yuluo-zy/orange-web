@@ -3,37 +3,6 @@ use crate::router::tree::art::node::{Node, NodeTrait};
 use crate::router::tree::art::node::keys::Partial;
 use crate::router::tree::art::utils::TreeError;
 
-pub(crate) struct ConcreteReadGuard<'a,P: Partial,V> {
-    version: usize,
-    node: &'a UnsafeCell<Node<P,V>>,
-}
-
-impl<'a,P: Partial,V> ConcreteReadGuard<'a,P,V> {
-    pub(crate) fn as_ref(&self) -> &Node<P,V> {
-        unsafe {
-            &*self.node.get()
-        }
-    }
-
-    pub(crate) fn upgrade(self) -> Result<ConcreteWriteGuard<'a,P, V>, (Self, TreeError)> {
-        let new_version = self.version + 0b10;
-        match self
-            .as_ref()
-            .type_version_lock_obsolete
-            .compare_exchange_weak(
-                self.version,
-                new_version,
-                Ordering::Release,
-                Ordering::Relaxed,
-            ) {
-            Ok(_) => Ok(ConcreteWriteGuard {
-                node: unsafe { &mut *self.node.get() },
-            }),
-            Err(v) => Err((self, TreeError::VersionNotMatch)),
-        }
-    }
-}
-
 pub(crate) struct ReadGuard<'a,P: Partial,V> {
     version: usize,
     node: &'a UnsafeCell<Node<P,V>>,
@@ -71,15 +40,6 @@ impl<'a,P: Partial,V> ReadGuard<'a, P, V> {
         self.check_version()
     }
 
-    #[must_use]
-    pub(crate) fn into_concrete(self) -> ConcreteReadGuard<'a, P, V> {
-
-        ConcreteReadGuard {
-            version: self.version,
-            node: unsafe { &*(self.node as *const UnsafeCell<Node<P,V>>) },
-        }
-    }
-
     pub(crate) fn upgrade(self) -> Result<WriteGuard<'a, P,V>, (Self, TreeError)> {
         let new_version = self.version + 0b10;
         match self
@@ -96,34 +56,6 @@ impl<'a,P: Partial,V> ReadGuard<'a, P, V> {
             }),
             Err(v) => Err((self, TreeError::VersionNotMatch)),
         }
-    }
-}
-
-pub(crate) struct ConcreteWriteGuard<'a, P: Partial,V> {
-    node: &'a mut Node<P,V>,
-}
-
-impl<'a, P: Partial,V> ConcreteWriteGuard<'a,P,V > {
-    pub(crate) fn as_ref(&self) -> &Node<P,V> {
-        self.node
-    }
-
-    pub(crate) fn as_mut(&mut self) -> &mut Node<P,V> {
-        self.node
-    }
-
-    pub(crate) fn mark_obsolete(&self) {
-        self.node
-            .type_version_lock_obsolete
-            .fetch_add(0b01, Ordering::Release);
-    }
-}
-
-impl<'a, P: Partial,V> Drop for ConcreteWriteGuard<'a,P,V > {
-    fn drop(&mut self) {
-        self.node
-            .type_version_lock_obsolete
-            .fetch_add(0b10, Ordering::Release);
     }
 }
 
