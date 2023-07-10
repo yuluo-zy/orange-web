@@ -63,6 +63,7 @@ pub enum NodeType {
 
 pub(crate) struct Node<P: Partial, V> {
     pub(crate) prefix: P,
+    // 2b type | 60b version | 1b lock | 1b obsolete
     pub(crate) type_version_lock_obsolete: AtomicUsize,
     pub(crate) tree_node: TreeNode<P, V>,
     value: PhantomData<V>,
@@ -124,6 +125,10 @@ impl<P: Partial, V> Node<P, V> {
 
     fn is_locked(version: usize) -> bool {
         (version & 0b10) == 0b10
+    }
+
+    pub fn set_version(&mut self, version: AtomicUsize) {
+        self.type_version_lock_obsolete = version;
     }
 
     fn is_obsolete(version: usize) -> bool {
@@ -319,7 +324,6 @@ impl<P: Partial, V> Node<P, V> {
     pub fn change(&mut self, node: Node<P, V>) {
         self.tree_node = node.tree_node;
         self.prefix = node.prefix;
-        self.type_version_lock_obsolete = node.type_version_lock_obsolete;
     }
 
     // #[allow(dead_code)]
@@ -333,39 +337,37 @@ impl<P: Partial, V> Node<P, V> {
     //     };
     // }
 
-    pub(crate) fn insert_unlock<'a>(node: ReadGuard<'a, P, V>, parent: (u8, Option<ReadGuard<P, V>>), val: (u8, Node<P, V>), guard: &Guard) -> Result<(), TreeError> {
-        Self::insert_grow(
-            node,
-            parent,
-            val,
-            guard,
-        )
-    }
-
-    pub(crate) fn insert_grow<'a>(
-        node: ReadGuard<'a, P, V>,
-        parent: (u8, Option<ReadGuard<P, V>>),
-        val: (u8, Node<P, V>),
-        guard: &Guard,
-    ) -> Result<(), TreeError> {
+    pub(crate) fn insert_unlock<'a>(node: &ReadGuard<'a, P, V>, val: (u8, Node<P, V>), _guard: &Guard) -> Result<(), TreeError> {
         // 解决 尚未充满的情况
         if !node.as_ref().is_full() {
-            if let Some(p) = parent.1 {
-                // 子节点修改, 父节点不能出现变更
-                p.unlock()?;
-            }
 
             let mut write_node = node.upgrade().map_err(|v| v.1)?;
             write_node.as_mut().add_child(val.0, val.1);
             return Ok(());
         };
 
-        let p_guard = parent.1.expect("parent node cannot find");
+        // 针对节点充满的情况需要进行添加操作
+        // let p_guard = parent.1.expect("parent node cannot find");
         // 节点充满的状态下, 则父节点需要存在, 用来锁定, 防止并发读写的时候出现问题
-        p_guard.upgrade().map_err(|v| v.1)?;
+        // p_guard.upgrade().map_err(|v| v.1)?;
         let mut write_n = node.upgrade().map_err(|v| v.1)?;
-        Self::grow(write_n.as_mut(), guard);
+        Self::grow(write_n.as_mut(), _guard);
         write_n.as_mut().add_child(val.0, val.1);
+        Ok(())
+    }
+
+    pub(crate) fn update_unlock(
+        node: &ReadGuard<P, V>,
+        val: (u8, Node<P, V>),
+        _guard: &Guard,
+    ) -> Result<(), TreeError> {
+        // 判断是否是 空节点的问题 && 判断 是否是 叶子节点 来完成 原地替换
+        if node.as_ref().node_type() == NodeType::Empty
+            ||( node.as_ref().node_type() == NodeType::Leaf && val.1.node_type() == NodeType::Leaf){
+
+            let mut write_node = node.upgrade().map_err(|v| v.1)?;
+            write_node.as_mut().change(val.1);
+        }
         Ok(())
     }
 }

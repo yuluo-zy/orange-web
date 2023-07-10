@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
 use crossbeam_epoch::Guard;
+use log::error;
 use crate::router::tree::art::node::keys::{Partial};
 use crate::router::tree::art::node::{Node, NodeType, TreeNode};
 use crate::router::tree::art::utils::{Backoff, TreeError};
@@ -107,7 +108,7 @@ impl<P: PrefixTraits, V> RawTree<P, V> {
     pub fn insert(&self, key: &P, value: V, guard: &Guard) -> Option<V> {
         let backoff = Backoff::new();
         loop {
-            match self.insert_inner(key, value, 0, guard) {
+            match RawTree::insert_inner(&self.root, key, value, 0, guard) {
                 Ok(v) => return v,
                 Err(e) => match e {
                     TreeError::Locked | TreeError::VersionNotMatch => {
@@ -121,91 +122,84 @@ impl<P: PrefixTraits, V> RawTree<P, V> {
     }
     #[inline]
     fn insert_inner(
-        &self,
+        tree_node: &Node<P,V>,
         key: &P,
         value: V,
         depth: usize,
         _guard: &Guard,
     ) -> Result<Option<V>, TreeError>
     {
-        let node_lock = self.root.read_lock()?;
+        // let mut parent_key: u8 = 0;
+        // let mut parent_node = None;
 
-        if node_lock.as_ref().node_type() = NodeType::Empty {
-            // 锁操作
-            node_lock.as_mut().change(Node::new_leaf(key.partial_after(0), value));
+        let mut node_key: u8 = 0;
+        let mut node;
+        let mut next_node = tree_node;
+
+        // 针对空节点来完成替换操作
+        if next_node.as_ref().node_type() == NodeType::Empty && depth == 0 {
+            let node_lock = next_node.read_lock()?;
+            let new_leaf = Node::new_leaf(key.partial_after(0), value);
+            Node::update_unlock(&node_lock, (node_key, new_leaf), _guard)?;
             return Ok(None);
         }
 
-        let mut node;
-
+        // 通用状态, 完成node节点的添加操作
         loop {
-            node = self.root.read_lock()?;
+            // parent_key = node_key;
+            node = next_node.read_lock()?;
 
+            // 查找最长前缀
             let longest_common_prefix = node.as_ref().prefix.prefix_length_key(key, depth);
 
+            // 是否长度匹配 某个节点
             let is_prefix_match =
                 min(node.as_ref().prefix.len(), key.length_at(depth)) == longest_common_prefix;
 
-            // 前缀匹配 并 当前节点与key完全匹配
+            // 前缀匹配 并 当前节点与key完全匹配 修改一个页节点
             if is_prefix_match && node.as_ref().prefix.len() == key.length_at(depth) {
-                if let TreeNode::Leaf(ref mut v) = &mut cur_node.tree_node {
-                    return Some(std::mem::replace(v.value_mut()?, value));
-                } else {
-                    panic!("Node type mismatch")
-                }
+                let new_leaf = Node::new_leaf(key.partial_after(0), value);
+                Node::update_unlock(&node, (node_key, new_leaf), _guard)?;
             }
 
+            // 分解节点
+            if !is_prefix_match {
+                let mut n4 = Node::<P,V>::new(NodeType::Node4, node.as_ref().prefix.partial_before(longest_common_prefix));
 
+                let k1 = node.as_ref().prefix.at(longest_common_prefix);
+                let k2 = key.at(depth + longest_common_prefix);
+
+                let mut write_node = node.upgrade().map_err(|v| v.1)?;
+                write_node.as_mut().prefix = node.as_ref().prefix.partial_after(longest_common_prefix);
+                n4.set_version(write_node.as_mut().type_version_lock_obsolete);
+                let replacement_current = std::mem::replace(write_node.as_mut(), n4);
+
+                let new_leaf = Node::new_leaf(key.partial_after(depth + longest_common_prefix), value);
+
+                Node::insert_unlock(&node,  (k1, replacement_current), _guard)?;
+                Node::insert_unlock(&node,  (k2, new_leaf), _guard)?;
+
+                return Ok(None);
+            }
+
+            let k = key.at(depth + longest_common_prefix);
+
+            let child_for_key = node.as_ref().find_child_mut(k);
+            if let Some(child) = child_for_key {
+                return RawTree::insert_inner(
+                    child,
+                    key,
+                    value,
+                    depth + longest_common_prefix,
+                    _guard
+                );
+            };
+
+            assert!(node.as_ref().node_type() != NodeType::Leaf);
+            let new_leaf = Node::new_leaf(key.partial_after(depth + longest_common_prefix), value);
+            Node::insert_unlock(&node,  (k, new_leaf), _guard)?;
+            None
         }
-
-        // let longest_common_prefix = cur_node.prefix.prefix_length_key(key, depth);
-        //
-        // let is_prefix_match =
-        //     min(cur_node.prefix.len(), key.length_at(depth)) == longest_common_prefix;
-        //
-        // // 前缀匹配 并 当前节点与key完全匹配
-        // if is_prefix_match && cur_node.prefix.len() == key.length_at(depth) {
-        //     if let TreeNode::Leaf(ref mut v) = &mut cur_node.tree_node {
-        //         return Some(std::mem::replace(v.value_mut()?, value));
-        //     } else {
-        //         panic!("Node type mismatch")
-        //     }
-        // }
-        //
-        // // 分解节点
-        // if !is_prefix_match {
-        //     let n4 = Node::new(NodeType::Node4, cur_node.prefix.partial_before(longest_common_prefix));
-        //
-        //     let k1 = cur_node.prefix.at(longest_common_prefix);
-        //     let k2 = key.at(depth + longest_common_prefix);
-        //
-        //     cur_node.prefix = cur_node.prefix.partial_after(longest_common_prefix);
-        //     let replacement_current = std::mem::replace(cur_node, n4);
-        //
-        //     let new_leaf = Node::new_leaf(key.partial_after(depth + longest_common_prefix), value);
-        //
-        //     cur_node.add_child(k1, replacement_current);
-        //     cur_node.add_child(k2, new_leaf);
-        //
-        //     return None;
-        // }
-        //
-        // let k = key.at(depth + longest_common_prefix);
-        //
-        // let child_for_key = cur_node.find_child_mut(k);
-        // if let Some(child) = child_for_key {
-        //     return self.insert_inner(
-        //         child,
-        //         key,
-        //         value,
-        //         depth + longest_common_prefix,
-        //     );
-        // };
-        //
-        // assert!(cur_node.node_type() != NodeType::Leaf);
-        // let new_leaf = Node::new_leaf(key.partial_after(depth + longest_common_prefix), value);
-        // cur_node.add_child(k, new_leaf);
-        // None
     }
 
     #[inline]

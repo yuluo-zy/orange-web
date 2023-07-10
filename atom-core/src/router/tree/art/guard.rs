@@ -3,6 +3,7 @@ use crate::router::tree::art::node::{Node, NodeTrait};
 use crate::router::tree::art::node::keys::Partial;
 use crate::router::tree::art::utils::TreeError;
 
+#[derive(Clone, Copy)]
 pub(crate) struct ReadGuard<'a,P: Partial,V> {
     version: usize,
     node: &'a UnsafeCell<Node<P,V>>,
@@ -20,9 +21,9 @@ impl<'a,P: Partial,V> ReadGuard<'a, P, V> {
         unsafe { &*self.node.get() }
     }
 
-    pub(crate) fn as_mut(&self) -> &mut Node<P,V> {
-        unsafe { self.node.get() as &mut Node<P,V> }
-    }
+    // pub(crate) fn as_mut(&self) -> &mut Node<P,V> {
+    //     unsafe { self.node.get() as &mut Node<P,V> }
+    // }
 
     pub(crate) fn check_version(&self) -> Result<usize, TreeError> {
         let v = self
