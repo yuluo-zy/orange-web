@@ -130,7 +130,8 @@ impl<P: PrefixTraits, V> RawTree<P, V> {
     {
         let node_lock = self.root.read_lock()?;
 
-        if node_lock.as_ref().node_type() = NodeType::Empty { // 锁操作
+        if node_lock.as_ref().node_type() = NodeType::Empty {
+            // 锁操作
             node_lock.as_mut().change(Node::new_leaf(key.partial_after(0), value));
             return Ok(None);
         }

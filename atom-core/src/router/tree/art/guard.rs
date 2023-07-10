@@ -15,6 +15,7 @@ impl<'a,P: Partial,V> ReadGuard<'a, P, V> {
             node: unsafe { &*(node as *const Node<P,V> as *const UnsafeCell<Node<P,V>>) },
         }
     }
+
     pub(crate) fn as_ref(&self) -> &'a Node<P,V> {
         unsafe { &*self.node.get() }
     }

@@ -6,7 +6,7 @@ use crate::router::tree::art::node::node::KeyedNode;
 use std::marker::PhantomData;
 use crossbeam_epoch::Guard;
 use rand::distributions::Open01;
-use crate::router::tree::art::guard::{ConcreteReadGuard, ReadGuard};
+use crate::router::tree::art::guard::{ReadGuard};
 use crate::router::tree::art::node::keys::Partial;
 use crate::router::tree::art::node::leaf_node::NodeLeaf;
 use crate::router::tree::art::utils::TreeError;
@@ -263,11 +263,13 @@ impl<P: Partial, V> Node<P, V> {
         match &mut node.tree_node {
             TreeNode::Node4(km) => {
                 node.tree_node = TreeNode::Node16(KeyedNode::from_resized_grow(km));
-                guard.defer(move || { km.children.clear(); })
+                km.children.clear();
+                // guard.defer( || { km.children.clear(); })
             }
             TreeNode::Node16(km) => {
                 node.tree_node = TreeNode::Node48(IndexNode::from_keyed(km));
-                guard.defer(move || { km.children.clear(); })
+                km.children.clear();
+                // guard.defer( || { km.children.clear(); })
             }
             TreeNode::Node48(im) => {
                 node.tree_node = TreeNode::Node256(DirectNode::from_indexed(im));
@@ -333,7 +335,7 @@ impl<P: Partial, V> Node<P, V> {
 
     pub(crate) fn insert_unlock<'a>(node: ReadGuard<'a, P, V>, parent: (u8, Option<ReadGuard<P, V>>), val: (u8, Node<P, V>), guard: &Guard) -> Result<(), TreeError> {
         Self::insert_grow(
-            node.into_concrete(),
+            node,
             parent,
             val,
             guard,
@@ -341,7 +343,7 @@ impl<P: Partial, V> Node<P, V> {
     }
 
     pub(crate) fn insert_grow<'a>(
-        node: ConcreteReadGuard<'a, P, V>,
+        node: ReadGuard<'a, P, V>,
         parent: (u8, Option<ReadGuard<P, V>>),
         val: (u8, Node<P, V>),
         guard: &Guard,
@@ -350,13 +352,13 @@ impl<P: Partial, V> Node<P, V> {
         if !node.as_ref().is_full() {
             if let Some(p) = parent.1 {
                 // 子节点修改, 父节点不能出现变更
-                p.unlock()?
+                p.unlock()?;
             }
 
             let mut write_node = node.upgrade().map_err(|v| v.1)?;
             write_node.as_mut().add_child(val.0, val.1);
             return Ok(());
-        }
+        };
 
         let p_guard = parent.1.expect("parent node cannot find");
         // 节点充满的状态下, 则父节点需要存在, 用来锁定, 防止并发读写的时候出现问题
