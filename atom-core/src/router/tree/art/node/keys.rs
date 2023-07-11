@@ -32,7 +32,7 @@ impl<const N: usize> PartialEq for RawKey<N> {
 impl<const SIZE: usize> RawKey<SIZE> {
     // todo: 优化复制问题
     pub fn from_slice(src: &[u8]) -> Self {
-        assert!(src.len() < SIZE);
+        assert!(src.len() <= SIZE);
         let mut data = [0; SIZE];
         data[..src.len()].clone_from_slice(src);
         Self {

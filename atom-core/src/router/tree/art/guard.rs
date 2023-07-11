@@ -4,12 +4,12 @@ use crate::router::tree::art::node::keys::Partial;
 use crate::router::tree::art::utils::TreeError;
 
 #[derive(Clone, Copy)]
-pub(crate) struct ReadGuard<'a,P: Partial,V> {
+pub(crate) struct ReadGuard<'a,P: Partial,V: Clone> {
     version: usize,
     node: &'a UnsafeCell<Node<P,V>>,
 }
 
-impl<'a,P: Partial,V> ReadGuard<'a, P, V> {
+impl<'a,P: Partial,V: Clone> ReadGuard<'a, P, V> {
     pub(crate) fn new(v: usize, node: &'a Node<P,V>) -> Self {
         Self {
             version: v,
@@ -21,9 +21,9 @@ impl<'a,P: Partial,V> ReadGuard<'a, P, V> {
         unsafe { &*self.node.get() }
     }
 
-    // pub(crate) fn as_mut(&self) -> &mut Node<P,V> {
-    //     unsafe { self.node.get() as &mut Node<P,V> }
-    // }
+    pub(crate) fn as_mut(&self) -> &mut Node<P,V> {
+        unsafe { &mut *self.node.get() }
+    }
 
     pub(crate) fn check_version(&self) -> Result<usize, TreeError> {
         let v = self
@@ -62,11 +62,11 @@ impl<'a,P: Partial,V> ReadGuard<'a, P, V> {
 }
 
 
-pub(crate) struct WriteGuard<'a, P: Partial,V> {
+pub(crate) struct WriteGuard<'a, P: Partial,V: Clone> {
     node: &'a mut Node<P, V>,
 }
 
-impl<'a,P: Partial,V> WriteGuard<'a, P,V> {
+impl<'a,P: Partial,V: Clone> WriteGuard<'a, P,V> {
     pub(crate) fn as_ref(&self) -> &Node<P, V> {
         self.node
     }
@@ -82,7 +82,7 @@ impl<'a,P: Partial,V> WriteGuard<'a, P,V> {
     }
 }
 
-impl<'a,P: Partial, V> Drop for WriteGuard<'a, P,V> {
+impl<'a,P: Partial, V: Clone> Drop for WriteGuard<'a, P,V> {
     fn drop(&mut self) {
         self.node
             .type_version_lock_obsolete

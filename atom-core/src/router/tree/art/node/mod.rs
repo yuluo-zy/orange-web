@@ -42,7 +42,7 @@ pub trait NodeTrait<N> {
     fn width(&self) -> usize;
 }
 
-pub(crate) enum TreeNode<P: Partial, V> {
+pub(crate) enum TreeNode<P: Partial, V: Clone> {
     Empty,
     Leaf(NodeLeaf<P, V>),
     Node4(KeyedNode<Node<P, V>, 4, Bitset8<1>>),
@@ -61,7 +61,7 @@ pub enum NodeType {
     Node256,
 }
 
-pub(crate) struct Node<P: Partial, V> {
+pub(crate) struct Node<P: Partial, V: Clone> {
     pub(crate) prefix: P,
     // 2b type | 60b version | 1b lock | 1b obsolete
     pub(crate) type_version_lock_obsolete: AtomicUsize,
@@ -70,7 +70,7 @@ pub(crate) struct Node<P: Partial, V> {
 }
 
 
-impl<P: Partial, V> Node<P, V> {
+impl<P: Partial, V: Clone> Node<P, V> {
     pub(crate) fn new(node_type: NodeType, prefix: P) -> Self {
         let node = match node_type {
             NodeType::Node4 => { TreeNode::Node4(KeyedNode::new()) }
@@ -127,8 +127,8 @@ impl<P: Partial, V> Node<P, V> {
         (version & 0b10) == 0b10
     }
 
-    pub fn set_version(&mut self, version: AtomicUsize) {
-        self.type_version_lock_obsolete = version;
+    pub fn set_version(&mut self, version: usize) {
+        self.type_version_lock_obsolete = AtomicUsize::new(version);
     }
 
     fn is_obsolete(version: usize) -> bool {
@@ -234,7 +234,7 @@ impl<P: Partial, V> Node<P, V> {
 
 
     #[inline]
-    fn is_full(&self) -> bool {
+    pub(crate) fn is_full(&self) -> bool {
         match &self.tree_node {
             TreeNode::Node4(km) => self.num_children() >= km.width(),
             TreeNode::Node16(km) => self.num_children() >= km.width(),
@@ -245,7 +245,19 @@ impl<P: Partial, V> Node<P, V> {
         }
     }
 
-    fn shrink(&mut self) {
+    #[inline]
+    pub(crate) fn full_by(&self, size: usize) -> bool {
+        match &self.tree_node {
+            TreeNode::Node4(km) => self.num_children() >= km.width() -size,
+            TreeNode::Node16(km) => self.num_children() >= km.width() -size,
+            TreeNode::Node48(im) => self.num_children() >= im.width() -size,
+            // Should not be possible.
+            TreeNode::Node256(_) => self.num_children() >= 256,
+            _ => unreachable!("Should not be possible."),
+        }
+    }
+
+    pub fn shrink(&mut self) {
         match &mut self.tree_node {
             TreeNode::Node4(_) => {
                 unreachable!("Should never shrink a node4")
@@ -264,16 +276,14 @@ impl<P: Partial, V> Node<P, V> {
         }
     }
 
-    fn grow(node: &mut Node<P, V>, guard: &Guard) {
+    pub fn grow(node: &mut Node<P, V>, _guard: &Guard) {
         match &mut node.tree_node {
             TreeNode::Node4(km) => {
                 node.tree_node = TreeNode::Node16(KeyedNode::from_resized_grow(km));
-                km.children.clear();
                 // guard.defer( || { km.children.clear(); })
             }
             TreeNode::Node16(km) => {
                 node.tree_node = TreeNode::Node48(IndexNode::from_keyed(km));
-                km.children.clear();
                 // guard.defer( || { km.children.clear(); })
             }
             TreeNode::Node48(im) => {
@@ -337,7 +347,7 @@ impl<P: Partial, V> Node<P, V> {
     //     };
     // }
 
-    pub(crate) fn insert_unlock<'a>(node: &ReadGuard<'a, P, V>, val: (u8, Node<P, V>), _guard: &Guard) -> Result<(), TreeError> {
+    pub(crate) fn insert_unlock(node: ReadGuard<P, V>, val: (u8, Node<P, V>), _guard: &Guard) -> Result<(), TreeError> {
         // 解决 尚未充满的情况
         if !node.as_ref().is_full() {
 
@@ -357,7 +367,7 @@ impl<P: Partial, V> Node<P, V> {
     }
 
     pub(crate) fn update_unlock(
-        node: &ReadGuard<P, V>,
+        node: ReadGuard<P, V>,
         val: (u8, Node<P, V>),
         _guard: &Guard,
     ) -> Result<(), TreeError> {

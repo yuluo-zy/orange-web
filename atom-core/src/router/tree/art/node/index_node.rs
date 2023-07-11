@@ -49,6 +49,7 @@ impl<N, const WIDTH: usize, Bitset: BitsetTrait> IndexNode<N, WIDTH, Bitset> {
             im.add_child(km.keys[i], stolen);
         }
         km.num_children = 0;
+        km.children.clear();
         im
     }
 
