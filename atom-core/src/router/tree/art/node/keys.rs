@@ -1,5 +1,6 @@
 use std::mem;
 use std::ops::Index;
+use log::info;
 
 pub trait Partial {
     fn partial_before(&self, length: usize) -> Self;
@@ -125,7 +126,7 @@ impl<const SIZE: usize> Partial for RawKey<SIZE> {
     #[inline(always)]
     fn prefix_length_key(
         &self,
-        key: & RawKey<SIZE>,
+        key: &RawKey<SIZE>,
         at_depth: usize,
     ) -> usize {
         let mut len = key.length_at(at_depth);

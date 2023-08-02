@@ -80,6 +80,14 @@ impl<'a,P: Partial,V: Clone> WriteGuard<'a, P,V> {
             .type_version_lock_obsolete
             .fetch_add(0b01, Ordering::Release);
     }
+
+    pub(crate) fn from_node(node: &mut Node<P,V>) ->  Result<WriteGuard<'a, P, V>, TreeError> {
+        // 判断是否是锁定的状态, 如果不是的话, 修改为 锁定状态
+        Ok(WriteGuard{
+            node,
+        })
+    }
+
 }
 
 impl<'a,P: Partial, V: Clone> Drop for WriteGuard<'a, P,V> {

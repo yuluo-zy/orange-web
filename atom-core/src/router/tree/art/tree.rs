@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use crossbeam_epoch::Guard;
 use log::error;
+use crate::router::tree::art::guard::WriteGuard;
 use crate::router::tree::art::node::keys::{Partial};
 use crate::router::tree::art::node::{Node, NodeType, TreeNode};
 use crate::router::tree::art::utils::{Backoff, TreeError};
@@ -130,9 +131,6 @@ impl<P: PrefixTraits, V: Clone> RawTree<P, V> {
         _guard: &Guard,
     ) -> Result<(), TreeError>
     {
-        // let mut parent_key: u8 = 0;
-        // let mut parent_node = None;
-
         let mut node_key: u8 = 0;
         let mut node;
         let mut next_node = tree_node;
@@ -165,13 +163,13 @@ impl<P: PrefixTraits, V: Clone> RawTree<P, V> {
 
                 let k1 = node.as_ref().prefix.at(longest_common_prefix);
                 let k2 = key.at(depth + longest_common_prefix);
-
                 let node_prefix = node.as_ref().prefix.partial_after(longest_common_prefix);
+
                 let mut write_node = node.upgrade().map_err(|v| v.1)?;
                 write_node.as_mut().prefix = node_prefix;
                 n4.set_version(write_node.as_ref().type_version_lock_obsolete.load(Ordering::Acquire));
-                let replacement_current = std::mem::replace(write_node.as_mut(), n4);
-
+                let mut replacement_current = std::mem::replace(write_node.as_mut(), n4);
+                replacement_current.un_locked();
                 let new_leaf = Node::new_leaf(key.partial_after(depth + longest_common_prefix), value);
                 if write_node.as_ref().full_by(REPLACE_WIDTH) {
                     Node::grow(write_node.as_mut(), _guard);

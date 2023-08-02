@@ -60,6 +60,7 @@ impl<K: PrefixTraits, V: Copy> ArtTree<K,V> {
 mod test {
     use std::sync::Arc;
     use std::thread;
+    use log::{info, log};
     use rand::prelude::StdRng;
     use rand::seq::SliceRandom;
     use rand::{thread_rng, Rng, SeedableRng};
@@ -68,8 +69,8 @@ mod test {
 
     #[test]
     fn test_concurrent_insert() {
-        let key_cnt_per_thread = 5;
-        let n_thread = 3;
+        let key_cnt_per_thread = 10000;
+        let n_thread = 1;
         let mut key_space = Vec::with_capacity(key_cnt_per_thread * n_thread);
         for i in 0..key_space.capacity() {
             key_space.push(i);
@@ -79,7 +80,7 @@ mod test {
 
         let key_space = Arc::new(key_space);
 
-        let tree = Arc::new(RawTree::<RawKey<8>, usize>::new());
+        let tree = Arc::new(RawTree::<RawKey<32>, usize>::new());
 
         let mut handlers = Vec::new();
         for t in 0..n_thread {
@@ -87,10 +88,11 @@ mod test {
             let mut tree = tree.clone();
 
             handlers.push(thread::spawn(move || {
-                let guard = crossbeam_epoch::pin();
                 for i in 0..key_cnt_per_thread {
+                    let guard = crossbeam_epoch::pin();
                     let idx = t * key_cnt_per_thread + i;
                     let val = key_space[idx];
+                    println!("key: {:?}, value: {:?}", val, val);
                     tree.insert(&RawKey::from(val), val, &guard);
                 }
             }));

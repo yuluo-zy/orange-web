@@ -127,6 +127,11 @@ impl<P: Partial, V: Clone> Node<P, V> {
         (version & 0b10) == 0b10
     }
 
+    pub fn un_locked(&mut self) {
+        self.type_version_lock_obsolete
+            .fetch_add(0b10, Ordering::Release);
+    }
+
     pub fn set_version(&mut self, version: usize) {
         self.type_version_lock_obsolete = AtomicUsize::new(version);
     }
@@ -374,7 +379,7 @@ impl<P: Partial, V: Clone> Node<P, V> {
         // 判断是否是 空节点的问题 && 判断 是否是 叶子节点 来完成 原地替换
         if node.as_ref().node_type() == NodeType::Empty
             ||( node.as_ref().node_type() == NodeType::Leaf && val.1.node_type() == NodeType::Leaf){
-
+            node.check_version()?;
             let mut write_node = node.upgrade().map_err(|v| v.1)?;
             write_node.as_mut().change(val.1);
         }
